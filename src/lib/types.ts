@@ -1,10 +1,5 @@
-/** The hospital contracts with exactly two insurers. "Both" is a reporting view, never a payer value. */
-export type Payer = 'Bupa' | 'Tawuniya';
-export type PayerView = Payer | 'Both';
-export const PAYERS: Payer[] = ['Bupa', 'Tawuniya'];
-
-export type FileType = 'claims' | 'rejections' | 'reference';
-export type ReferenceKind = 'price-list' | 'approval-list' | 'drug-formulary' | 'other';
+/** Where a file was uploaded: it decides how the platform treats it. */
+export type Section = 'medical' | 'rejection' | 'technical';
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
@@ -16,20 +11,11 @@ export type AuditArea =
   | 'Missing medical data'
   | 'Severity / Justification'
   | 'ICD coding quality'
-  | 'Technical & administrative'
-  | 'Historical rejection pattern';
-
-/** What kind of statement a finding makes – kept distinct so reviewers know how much weight it carries. */
-export type FindingKind = 'data-error' | 'missing-documentation' | 'clinical-concern' | 'historical-pattern' | 'unable-to-verify';
-
-/** Who a rule applies to. */
-export type RuleScope = 'Shared' | Payer;
+  | 'Follow-up & duplicates';
 
 export interface Diagnosis {
   code: string;
   desc: string;
-  /** Source column, e.g. ICD1, diag 2. */
-  column?: string;
 }
 
 export interface Vitals {
@@ -44,9 +30,7 @@ export interface Vitals {
 }
 
 export interface ServiceLine {
-  id: string; // `${importId}#${rowNo}`
-  importId: string;
-  rowNo: number; // 1-based row number in the source file (including the header offset)
+  id: string;
   invoice: string;
   category: string;
   code: string;
@@ -55,18 +39,14 @@ export interface ServiceLine {
   billed: number;
   net: number;
   patientShare: number;
-  discount: number;
-  deductible: number;
-  netVat?: number;
-  cashVat?: number;
   gtin?: string;
   tooth?: string;
 }
 
 export interface Claim {
-  /** Encounter key (see parse.ts grouping): payer + MRN + service date + physician + encounter type. */
+  /** Encounter key: claim no + MRN + service date + physician (one HIS claim no can hold several visits). */
   id: string;
-  claimNo: string; // as exported; may be empty when the HIS sends -1
+  claimNo: string;
   mrn: string;
   patientName: string;
   gender: 'M' | 'F' | '';
@@ -74,8 +54,7 @@ export interface Claim {
   ageText: string;
   maritalStatus: string;
   nationality: string;
-  payer: Payer;
-  payerRaw: string;
+  payer: string;
   policyHolder: string;
   memberId: string;
   className: string;
@@ -85,37 +64,30 @@ export interface Claim {
   physician: string;
   specialty: string;
   serviceDate: string; // ISO yyyy-mm-dd
-  admissionDate: string;
   submissionDate: string;
-  period: string; // yyyy-mm
   diagnoses: Diagnosis[];
   vitals: Vitals;
   lmp: string;
-  history: string;
+  history: string; // chief complaint / HPI
   examination: string;
   plan: string;
   onsetFlag: string;
   lines: ServiceLine[];
-  invoices: string[];
-  /** Why the grouping may be wrong (empty when unambiguous). */
-  groupingWarnings: string[];
-  groupingBasis: string;
   sourceFile: string;
-  importId: string;
+  /** Upload area the file came from (medical audit, rejected claims, technical audit). */
+  section?: Section;
+  sourceFileId?: string;
 }
 
 export interface Finding {
   id: string;
   ruleId: string;
   area: AuditArea;
-  kind: FindingKind;
-  scope: RuleScope;
   severity: Severity;
   title: string;
   detail: string;
-  /** What in the record supports the finding (quoted note, vitals, codes). */
-  evidence?: string;
   fix: string;
+  /** Text the doctor can paste into the note / reply to the payer. */
   suggestedNote?: string;
   lineIds?: string[];
   amountAtRisk: number;
@@ -125,64 +97,37 @@ export interface Finding {
 export interface ClaimAudit {
   claim: Claim;
   findings: Finding[];
-  score: number;
-  /** Net SAR of distinct lines touched by critical/high findings (each line counted once). */
+  score: number; // 0 (clean) .. 100 (certain rejection)
   amountAtRisk: number;
   worst: Severity | null;
 }
 
-export type RejectionGroup = 'Medical' | 'Technical/Administrative' | 'Needs review';
-
-export type LinkStatus = 'linked' | 'probable' | 'invoice-only' | 'unmatched';
+export type RejectionGroup = 'Medical' | 'Technical';
 
 export interface Rejection {
-  id: string; // `${importId}#${rowNo}`
-  importId: string;
-  rowNo: number;
-  payer: Payer;
+  id: string;
+  payer: string;
   source: string;
   batch: string;
-  period: string; // yyyy-mm (service month when known, else statement period)
   claimRef: string;
   invoice: string;
   serviceCode: string;
   serviceDesc: string;
-  /** Rejected net amount (excludes VAT, patient share, discounts). */
   amount: number;
-  /** Line-level VAT on the rejected amount, only when the payer file provides it. */
-  vat: number | null;
-  /** Price excess reported separately by the payer (not counted as rejected amount). */
-  priceExcess: number;
   reasonRaw: string;
-  reasonCode: string; // payer's own code (e.g. Bupa REJ_CODE)
   nphiesCode: string;
   causeId: string;
   cause: string;
   group: RejectionGroup;
-  subcategory: string;
-  confidence: 'code' | 'description' | 'none';
-  overridden: boolean;
-  category: string;
+  category: string; // service category (Laboratory, Medicine...)
   icd: string;
   doctor: string;
   specialty: string;
   serviceDate: string;
-  appealStatus: string;
+  appealStatus: string; // AGREED / DISAGREED / ''
   appealText: string;
+  /** Drug-diagnosis rejections list the diagnosis codes the payer named. */
   icdsNamed: string[];
-  link: LinkStatus;
+  /** Claim number in the uploaded HIS export this rejection was linked to. */
   linkedClaim?: string;
-  linkedLine?: string;
-}
-
-/** Non-rejection financial rows found in statements (deductible differences etc.), reported separately. */
-export interface FinancialAdjustment {
-  id: string;
-  importId: string;
-  rowNo: number;
-  payer: Payer;
-  period: string;
-  label: string;
-  amount: number;
-  vat: number | null;
 }

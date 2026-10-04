@@ -1,5 +1,4 @@
-import type { AuditArea, Claim, ClaimAudit, Finding, FindingKind, RuleScope, ServiceLine, Severity } from './types';
-import { historicalFindings, type HistoryIndex } from './history';
+import type { AuditArea, Claim, ClaimAudit, Finding, ServiceLine, Severity } from './types';
 import { checkIndication, suggestIndications, type DrugMatch, type Formulary } from './formulary';
 import { SERVICE_RULES, NON_COVERED_ICDS, type ServiceRule } from './kb/services';
 import { AGE_RULES, DRUG_DISEASE, INTERACTIONS, NON_DRUG_ITEMS, PREGNANCY_AVOID, classesOf, isInjectable, isTopical, type DrugClass } from './kb/drugs';
@@ -63,41 +62,17 @@ function ddfAgeLimit(m: DrugMatch): { min?: number; max?: number; note: string }
   return res.min !== undefined || res.max !== undefined ? res : null;
 }
 
-type NewFinding = Omit<Finding, 'id' | 'amountAtRisk' | 'kind' | 'scope'> & { amountAtRisk?: number; kind?: FindingKind; scope?: RuleScope };
 interface Builder {
-  add(f: NewFinding): void;
+  add(f: Omit<Finding, 'id' | 'amountAtRisk'> & { amountAtRisk?: number }): void;
 }
 
-/** Rules about contracts, codes, approvals and billing mechanics – grouped under "Technical & administrative". */
-export const TECHNICAL_RULES = new Set(['FUP-001', 'FUP-002', 'FUP-003', 'SVC-007', 'DDX-003', 'DDX-005', 'COD-001', 'COD-004', 'SVC-010', 'TEC-PRICE-001', 'TEC-PRICE-002', 'TEC-PA-001', 'TEC-FIN-001', 'TEC-GRP-001', 'TEC-UNITS-001']);
-
-const DATA_ERROR = new Set(['COD-001', 'COD-002', 'COD-004', 'VIT-010', 'FUP-002', 'SVC-008', 'DDX-003', 'SVC-010', 'TEC-PRICE-001', 'TEC-PRICE-002', 'TEC-FIN-001', 'TEC-UNITS-001']);
-const MISSING_DOC = new Set(['VIT-009', 'VIT-011', 'VIT-012', 'DDX-005', 'TEC-PA-001', 'SEV-001', 'SEV-002']);
-const UNVERIFIED = new Set(['SVC-007', 'TEC-GRP-001', 'DDX-002', 'SYS-001']);
-export function kindOf(ruleId: string): FindingKind {
-  if (ruleId.startsWith('HIST')) return 'historical-pattern';
-  if (DATA_ERROR.has(ruleId)) return 'data-error';
-  if (MISSING_DOC.has(ruleId) || ruleId.startsWith('DOC')) return 'missing-documentation';
-  if (UNVERIFIED.has(ruleId)) return 'unable-to-verify';
-  return 'clinical-concern';
-}
-
-export interface AuditContext {
-  priceList?: Map<string, { code: string; price: number; importId: string; rowNo: number; desc: string }>;
-  priceListName?: string;
-  approvalList?: Map<string, { code: string; rule: string; desc: string }>;
-  approvalListName?: string;
-  history?: HistoryIndex;
-}
-
-export function auditClaim(claim: Claim, formulary: Formulary | null, history: Claim[] = [], ctx: AuditContext = {}): ClaimAudit {
+export function auditClaim(claim: Claim, formulary: Formulary | null, history: Claim[] = []): ClaimAudit {
   const findings: Finding[] = [];
   const lineById = new Map(claim.lines.map((l) => [l.id, l]));
   const b: Builder = {
     add(f) {
       const amt = f.amountAtRisk ?? (f.lineIds ?? []).reduce((s, id) => s + (lineById.get(id) ? lineAmount(lineById.get(id)!) : 0), 0);
-      const area = TECHNICAL_RULES.has(f.ruleId) ? 'Technical & administrative' : f.area;
-      findings.push({ ...f, area, kind: f.kind ?? kindOf(f.ruleId), scope: f.scope ?? 'Shared', id: `${claim.id}-${findings.length + 1}`, amountAtRisk: Math.round(amt * 100) / 100 });
+      findings.push({ ...f, id: `${claim.id}-${findings.length + 1}`, amountAtRisk: Math.round(amt * 100) / 100 });
     },
   };
   const icds = claim.diagnoses.map((d) => d.code);
@@ -273,8 +248,8 @@ export function auditClaim(claim: Claim, formulary: Formulary | null, history: C
       if (age !== null && ((r.minAge !== undefined && age < r.minAge) || (r.maxAge !== undefined && age > r.maxAge))) {
         b.add({ ruleId: 'SVC-004', area: 'Diagnosis ↔ Service', severity: 'high', title: `${r.label}: unusual for age ${claim.ageText}`, detail: `${l.desc} is normally indicated for ages ${r.minAge ?? 0}–${r.maxAge ?? '∞'}.`, fix: 'Document the specific reason.', lineIds: [l.id], refs: ['Clinical practice guideline age criteria'] });
       }
-      if (r.id === 'RAD-MRI-CT' && !claim.approvalNo && !ctx.approvalList) {
-        b.add({ ruleId: 'SVC-007', area: 'Diagnosis ↔ Service', severity: 'medium', title: `${l.desc}: no approval number recorded – verify`, detail: `CT/MRI commonly need pre-authorisation, but no ${claim.payer} approval list has been uploaded, so this cannot be confirmed.`, fix: `Check ${claim.payer}'s approval requirements; upload the approval list under All files → Reference data to verify automatically.`, lineIds: [l.id], refs: ['Hospital rule – verify against insurer approval list'] });
+      if (r.id === 'RAD-MRI-CT' && !claim.approvalNo) {
+        b.add({ ruleId: 'SVC-007', area: 'Diagnosis ↔ Service', severity: 'high', title: `${l.desc}: no pre-authorisation number`, detail: 'CT/MRI require pre-authorisation under Saudi payer contracts. No approval number is recorded.', fix: 'Obtain approval before the scan and record the approval number on the claim.', lineIds: [l.id], refs: ['NPHIES BE-1-4 Pre-authorisation required'] });
       }
       if (r.coverageNote) b.add({ ruleId: 'SVC-005', area: 'Diagnosis ↔ Service', severity: 'medium', title: `${r.label}: coverage limitation`, detail: r.coverageNote + ' ' + r.why, fix: r.suggest, lineIds: [l.id], amountAtRisk: 0, refs: r.refs });
       if (r.contra && has(text, r.contra.re) && (r.contra.maxAge === undefined || (age !== null && age < r.contra.maxAge))) {
@@ -439,7 +414,7 @@ export function auditClaim(claim: Claim, formulary: Formulary | null, history: C
     const same = prior.find((x) => x.h.physician === claim.physician) ?? prior.find((x) => x.h.specialty === claim.specialty);
     if (same) {
       const shared = same.h.diagnoses.some((d) => icds.some((c) => c.slice(0, 3) === d.code.slice(0, 3)));
-      b.add({ ruleId: 'FUP-001', area: 'Technical & administrative', severity: shared ? 'high' : 'medium', title: `Consultation within free follow-up period (${Math.round(same.days)} days after claim ${same.h.claimNo})`, detail: `Previous visit ${same.h.serviceDate} with ${same.h.physician} (${same.h.specialty}) – ${shared ? 'same diagnosis group' : 'different diagnosis'}. Payers apply the 14-day free follow-up rule (NPHIES CV-1-9, Tawuniya "Same Physician").`, fix: shared ? 'Do not bill a new consultation for follow-up of the same condition within 14 days (bill services only).' : 'Document that this is a NEW complaint unrelated to the previous visit and code it clearly.', lineIds: [consult.id], refs: ['CHI Unified Policy – follow-up visits', 'NPHIES CV-1-9'] });
+      b.add({ ruleId: 'FUP-001', area: 'Follow-up & duplicates', severity: shared ? 'high' : 'medium', title: `Consultation within free follow-up period (${Math.round(same.days)} days after claim ${same.h.claimNo})`, detail: `Previous visit ${same.h.serviceDate} with ${same.h.physician} (${same.h.specialty}) – ${shared ? 'same diagnosis group' : 'different diagnosis'}. Payers apply the 14-day free follow-up rule (NPHIES CV-1-9, Tawuniya "Same Physician").`, fix: shared ? 'Do not bill a new consultation for follow-up of the same condition within 14 days (bill services only).' : 'Document that this is a NEW complaint unrelated to the previous visit and code it clearly.', lineIds: [consult.id], refs: ['CHI Unified Policy – follow-up visits', 'NPHIES CV-1-9'] });
     }
   }
   const codeCount = new Map<string, ServiceLine[]>();
@@ -449,33 +424,15 @@ export function auditClaim(claim: Claim, formulary: Formulary | null, history: C
     codeCount.set(k, [...(codeCount.get(k) ?? []), l]);
   }
   for (const ls of codeCount.values()) {
-    if (ls.length > 1) b.add({ ruleId: 'FUP-002', area: 'Technical & administrative', severity: 'high', title: `Duplicate service: ${ls[0].desc} ×${ls.length}`, detail: 'The same service code is billed more than once on the same invoice/date (NPHIES AD-2-4).', fix: 'Remove the duplicate or use the units field with documented reason (e.g. bilateral).', lineIds: ls.slice(1).map((l) => l.id), refs: ['NPHIES AD-2-4 duplicate service'] });
+    if (ls.length > 1) b.add({ ruleId: 'FUP-002', area: 'Follow-up & duplicates', severity: 'high', title: `Duplicate service: ${ls[0].desc} ×${ls.length}`, detail: 'The same service code is billed more than once on the same invoice/date (NPHIES AD-2-4).', fix: 'Remove the duplicate or use the units field with documented reason (e.g. bilateral).', lineIds: ls.slice(1).map((l) => l.id), refs: ['NPHIES AD-2-4 duplicate service'] });
   }
   if (claim.mrn && claim.serviceDate) {
     for (const d of drugs) {
       const prev = history.find((h) => h.id !== claim.id && h.mrn === claim.mrn && h.serviceDate && h.serviceDate < claim.serviceDate && (Date.parse(claim.serviceDate) - Date.parse(h.serviceDate)) / 86400000 < 20 && h.lines.some((l) => isDrugLine(l) && l.code === d.line.code));
-      if (prev && !d.injectable) b.add({ ruleId: 'FUP-003', area: 'Technical & administrative', severity: 'medium', title: `Refill too soon: ${d.line.desc}`, detail: `Same drug dispensed on ${prev.serviceDate} (claim ${prev.claimNo}).`, fix: 'Check remaining supply; document loss/dose change if a new pack is necessary.', lineIds: [d.line.id], refs: ['PBM refill-too-soon edit'] });
+      if (prev && !d.injectable) b.add({ ruleId: 'FUP-003', area: 'Follow-up & duplicates', severity: 'medium', title: `Refill too soon: ${d.line.desc}`, detail: `Same drug dispensed on ${prev.serviceDate} (claim ${prev.claimNo}).`, fix: 'Check remaining supply; document loss/dose change if a new pack is necessary.', lineIds: [d.line.id], refs: ['PBM refill-too-soon edit'] });
     }
   }
 
-  // ─────────────── Technical & administrative (reference-based) ───────────────
-  if (claim.groupingWarnings.length) {
-    b.add({ ruleId: 'TEC-GRP-001', area: 'Technical & administrative', severity: 'medium', title: 'Encounter grouping needs review', detail: `${claim.groupingBasis}. ${claim.groupingWarnings.join('; ')}. Invoices: ${claim.invoices.join(', ') || 'none'}.`, fix: 'Check in the HIS whether these rows belong to one visit before submission; findings that depend on the whole visit (diagnosis ↔ service, follow-up) may be affected.', amountAtRisk: 0, refs: ['Import grouping rule'] });
-  }
-  for (const l of claim.lines) {
-    if (l.billed > 0 && l.net > l.billed + 0.01) b.add({ ruleId: 'TEC-FIN-001', area: 'Technical & administrative', severity: 'high', title: `Net amount above billed amount: ${l.desc}`, detail: `Billed ${l.billed}, net ${l.net} (row ${l.rowNo}).`, evidence: `Billed ${l.billed} · discount ${l.discount} · patient share ${l.patientShare} · net ${l.net}`, fix: 'Correct the pricing/discount on this line in the HIS.', lineIds: [l.id], refs: ['Hospital data-quality rule'] });
-    if (l.net < 0) b.add({ ruleId: 'TEC-FIN-001', area: 'Technical & administrative', severity: 'high', title: `Negative net amount: ${l.desc}`, detail: `Net ${l.net} (row ${l.rowNo}).`, fix: 'Correct the line before submission.', lineIds: [l.id], amountAtRisk: 0, refs: ['Hospital data-quality rule'] });
-    if (ctx.priceList && !isDrugLine(l) && !isConsultLine(l) && l.code) {
-      const p = ctx.priceList.get(l.code.replace(/\s+/g, '').toUpperCase());
-      if (!p) b.add({ ruleId: 'TEC-PRICE-001', area: 'Technical & administrative', scope: claim.payer, severity: 'high', title: `Code not in ${claim.payer} price list: ${l.code}`, detail: `${l.desc} (row ${l.rowNo}) is not in ${ctx.priceListName}.`, fix: `Map the item to the contracted ${claim.payer} code or request a price-list addition.`, lineIds: [l.id], refs: [`${claim.payer} price list (${ctx.priceListName})`] });
-      else if (l.units > 0 && Math.abs(l.billed / l.units - p.price) > 0.01) b.add({ ruleId: 'TEC-PRICE-002', area: 'Technical & administrative', scope: claim.payer, severity: 'medium', title: `Unit price differs from ${claim.payer} contract: ${l.code}`, detail: `Billed ${(l.billed / l.units).toFixed(2)} per unit vs contracted ${p.price.toFixed(2)} (price list row ${p.rowNo}).`, fix: 'Check whether the gross price or a discount rule is applied; correct the HIS price master if needed.', lineIds: [l.id], amountAtRisk: 0, refs: [`${claim.payer} price list (${ctx.priceListName})`] });
-    }
-    if (ctx.approvalList && l.code && !claim.approvalNo) {
-      const a = ctx.approvalList.get(l.code.replace(/\s+/g, '').toUpperCase());
-      if (a) b.add({ ruleId: 'TEC-PA-001', area: 'Technical & administrative', scope: claim.payer, severity: 'high', title: `${claim.payer} approval required but no approval number: ${l.desc}`, detail: `${a.rule || 'Listed as requiring pre-authorisation'} (${ctx.approvalListName}).`, fix: 'Obtain the approval and record the approval number before submission.', lineIds: [l.id], refs: [`${claim.payer} approval list (${ctx.approvalListName})`] });
-    }
-  }
-  if (ctx.history) for (const f of historicalFindings(claim, ctx.history)) b.add(f);
   return finalize(claim, findings);
 }
 
@@ -493,22 +450,31 @@ export function finalize(claim: Claim, all: Finding[]): ClaimAudit {
   return { claim, findings, score, amountAtRisk, worst: findings[0]?.severity ?? null };
 }
 
+/** Rules about contracts, codes, approvals and billing mechanics – shown in the Technical audit. */
+export const TECHNICAL_RULES = new Set(['FUP-001', 'FUP-002', 'FUP-003', 'SVC-007', 'DDX-003', 'DDX-005', 'COD-001', 'COD-004', 'SVC-010']);
+export type AuditView = 'medical' | 'technical' | 'all';
+
+export function viewAudit(a: ClaimAudit, view: AuditView): ClaimAudit {
+  if (view === 'all') return a;
+  return finalize(a.claim, a.findings.filter((f) => (view === 'technical') === TECHNICAL_RULES.has(f.ruleId)));
+}
+
 function mentionPositiveAny(text: string, re: RegExp): boolean {
   return mention(text, re) === 'positive';
 }
 
-export function auditAll(claims: Claim[], formulary: Formulary | null, ctxFor: (c: Claim) => AuditContext = () => ({})): ClaimAudit[] {
+export function auditAll(claims: Claim[], formulary: Formulary | null): ClaimAudit[] {
   // Follow-up and refill checks only look at the same patient: index by MRN so large files stay fast.
   const byMrn = new Map<string, Claim[]>();
   for (const c of claims) if (c.mrn) byMrn.set(c.mrn, [...(byMrn.get(c.mrn) ?? []), c]);
   return claims.map((c) => {
     try {
-      return auditClaim(c, formulary, c.mrn ? byMrn.get(c.mrn)!.filter((h) => h.payer === c.payer) : [], ctxFor(c));
+      return auditClaim(c, formulary, c.mrn ? byMrn.get(c.mrn)! : []);
     } catch (e) {
       // One malformed row must never blank the whole audit.
-      return finalize(c, [{ id: `${c.id}-err`, ruleId: 'SYS-001', area: 'ICD coding quality', kind: 'unable-to-verify', scope: 'Shared', severity: 'low', title: 'Encounter could not be fully audited', detail: String(e), fix: 'Check this encounter’s rows in the source file.', amountAtRisk: 0, refs: [] }]);
+      return finalize(c, [{ id: `${c.id}-err`, ruleId: 'SYS-001', area: 'ICD coding quality', severity: 'low', title: 'Encounter could not be fully audited', detail: String(e), fix: 'Check this encounter’s rows in the source file.', amountAtRisk: 0, refs: [] }]);
     }
   });
 }
 
-export const AREAS: AuditArea[] = ['Diagnosis ↔ Service', 'Drug ↔ Diagnosis', 'Drug safety & interactions', 'Vital signs ↔ History', 'Missing medical data', 'Severity / Justification', 'ICD coding quality', 'Technical & administrative', 'Historical rejection pattern'];
+export const AREAS: AuditArea[] = ['Diagnosis ↔ Service', 'Drug ↔ Diagnosis', 'Drug safety & interactions', 'Vital signs ↔ History', 'Missing medical data', 'Severity / Justification', 'ICD coding quality', 'Follow-up & duplicates'];

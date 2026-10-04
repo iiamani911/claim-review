@@ -71,7 +71,7 @@ export const SERVICE_RULES: ServiceRule[] = [
     conditional: [{ icd: ['Z34', 'Z33', 'Z35', 'Z3A', 'O', 'Z32'], needs: /booking|first (antenatal|anc|visit)|1st (anc|visit)|initial (antenatal|visit)|new pregnan|blood group (is )?(not known|unknown)|unknown blood group|no previous (blood group|record)|rh negative|rh -ve/i, needsLabel: 'first antenatal booking visit / blood group unknown (payers pay once per pregnancy)' }],
     suggest: 'For antenatal booking code Z34.0x/Z34.8x (specific trimester) + Z36 antenatal screening and write "first antenatal booking visit – blood group/Rh unknown". Once per pregnancy only.',
     why: 'ACOG/NICE NG201: ABO & Rh typing is a booking-visit test. Payers reject repeats and claims coded only Z34.9 without booking documentation; outside pregnancy it needs pre-op/transfusion/bleeding indication.',
-    refs: ['NICE NG201 Antenatal care', 'ACOG Practice Bulletin 181', 'Observed in WAD Tawuniya statement 07-2026: MN-1-1 ×3 with Z34.9'],
+    refs: ['NICE NG201 Antenatal care', 'ACOG Practice Bulletin 181', 'Observed: Tawuniya MN-1-1 ×3 (Z34.9)'],
   },
   {
     id: 'LAB-UA', label: 'Urinalysis', match: /urine ?analysis|urinalysis|urine (routine|r\/m|re\b|exam)|\bu\/?a\b|urine dip/i,
@@ -133,7 +133,7 @@ export const SERVICE_RULES: ServiceRule[] = [
     id: 'LAB-VITD', label: 'Vitamin D (25-OH)', match: /vitamin d|25.?hydroxy|25.?oh|calciferol/i,
     icd: ['E55', 'E20', 'E21', 'E83.5', 'M80', 'M81', 'M82', 'M83', 'N18', 'N25.0', 'K90', 'K50', 'K51', 'E66.01', 'Z79.52', 'Z79.899', 'E64.3', 'M88', 'K91.2'],
     suggest: 'Code E55.9 (known deficiency on treatment – follow-up), M81.x osteoporosis, N18.x CKD or K90.x malabsorption, and document the risk factor.',
-    why: 'Endocrine Society & Choosing Wisely: no population screening for vitamin D. Insurers may treat it as screening unless deficiency follow-up or a risk condition is documented – verify the insurer’s policy.',
+    why: 'Endocrine Society & Choosing Wisely: no population screening for vitamin D. Most Saudi payers cover it only for documented deficiency follow-up or high-risk conditions.',
     refs: ['Endocrine Society 2024 Vitamin D guideline', 'Choosing Wisely', 'CHI policy – screening exclusions'],
     coverageNote: 'Frequently excluded as screening.',
   },
@@ -289,7 +289,7 @@ export const SERVICE_RULES: ServiceRule[] = [
     icd: ['O', 'Z34', 'Z33', 'Z36', 'Z3A', 'Z32.01', 'N96', 'O09'], gender: 'F',
     suggest: 'Code the pregnancy with trimester (Z34.0x/Z34.8x) + Z36 screening, or the complication (O20.0 threatened abortion, O26.8 pain in pregnancy).',
     why: 'Routine obstetric scans: dating 11–14 wks, anomaly 18–22 wks (NICE NG201). Extra scans need an obstetric complication. Some contracts require pre-authorisation for ultrasound.',
-    refs: ['NICE NG201', 'ISUOG practice guidelines', 'Observed in WAD Bupa statement 06-2026: BE-1-4 on pregnancy ultrasound'],
+    refs: ['NICE NG201', 'ISUOG practice guidelines', 'Observed: Bupa BE-1-4 (U/S pregnancy pre-auth)'],
   },
   {
     id: 'RAD-ABD-US', label: 'Abdominal / pelvic ultrasound', match: /(u\/?s|ultra ?sound|sonar|sonograph).*(abd|pelvi|kub|renal|kidney|liver|gall|hepat|bladder|uterus|ovar|transvag)|transvaginal|\btvs\b|abdom.*(u\/?s|ultra)/i,
@@ -298,7 +298,7 @@ export const SERVICE_RULES: ServiceRule[] = [
     contra: { re: /constipat|infrequ\w* (defecation|stool|bowel)|hard stool|straining|no (bowel motion|stool) for/i, maxAge: 18, why: 'NASPGHAN/ESPGHAN 2014: abdominal ultrasound is not recommended to diagnose functional constipation in children – code K59.0 and treat; image only with red flags (bilious vomiting, distension, failure to thrive).' },
     suggest: 'Code the specific suspicion (K80.20 gallstones, N20.0 renal stone, N83.2 ovarian cyst, K35.80 appendicitis) — not the vague R10.4/R10.0 alone — and document the examination finding that made the scan necessary.',
     why: 'ACR: imaging must answer a defined question. "Abdominal pain" alone (R10.4) or functional constipation in a well child is not an indication; payer applies MN-1-1.',
-    refs: ['ACR Appropriateness – acute abdominal pain', 'NASPGHAN constipation guideline (no routine imaging)', 'Observed in WAD Tawuniya statement 07-2026: MN-1-1 ×2 with R10.0/R10.4'],
+    refs: ['ACR Appropriateness – acute abdominal pain', 'NASPGHAN constipation guideline (no routine imaging)', 'Observed: Tawuniya MN-1-1 ×2 (R10.0/R10.4)'],
   },
   {
     id: 'RAD-SPINE-C', label: 'Cervical spine imaging', match: /cervical (spine|vert)|c.?spine/i,
@@ -386,7 +386,7 @@ export const SERVICE_RULES: ServiceRule[] = [
     icd: [],
     conditional: [{ icd: ['M', 'S', 'G', 'R51', 'I6', 'C', 'D', 'K', 'N', 'J', 'H', 'R10', 'R2', 'R4', 'R5', 'Q', 'T'], needs: /red flag|neuro|deficit|weakness|numb|radiat|sciatica|failed|no improvement|not improv|despite|physiother|\b([6-9]|\d{2})\s*weeks?|\b([2-9]|\d{2})\s*months?|trauma|fracture|tumou?r|mass|cancer|fever|weight loss|bladder|bowel|saddle|sudden|worst headache|seizure|vomit/i, needsLabel: 'red flags, neurological deficit or ≥ 6 weeks failed conservative care (and a pre-authorisation number)' }],
     suggest: 'Document red flags / neurological findings / failed conservative treatment duration, and quote the approval (pre-auth) number.',
-    why: 'CT/MRI commonly require pre-authorisation (verify against the insurer’s approval list) and should meet ACR appropriateness criteria.',
+    why: 'CT/MRI are pre-authorisation services under virtually all Saudi payer contracts (NPHIES BE-1-4) and must meet ACR appropriateness.',
     refs: ['ACR Appropriateness Criteria', 'NPHIES BE-1-4 pre-authorisation'],
   },
 
@@ -397,7 +397,7 @@ export const SERVICE_RULES: ServiceRule[] = [
     conditional: [{ icd: ['J', 'R50', 'R51', 'R10', 'K29', 'K30', 'K21', 'R11', 'R42', 'R53', 'B34', 'M54'], needs: DEHYDRATION, needsLabel: 'dehydration signs (tachycardia, dry mucosa, poor intake, ≥ 4 vomits, oliguria) or inability to take oral medication' }],
     suggest: 'If clinically true, document dehydration signs (pulse, mucosa, capillary refill, urine output, number of vomits) and add E86.0 dehydration; otherwise give oral rehydration/oral medication.',
     why: 'IV fluids/IV route are not justified for URTI, pharyngitis, fever or mild gastritis in a patient who tolerates oral intake (WHO/NICE CG84; NICE NG29). Payer rejected IV administration ×7 in July for J00/J02/J06/R50/K21.',
-    refs: ['NICE CG84 gastroenteritis in children', 'NICE NG29 IV fluids', 'Observed in WAD Tawuniya statement 07-2026: MN-1-1 ×7 on IV administration'],
+    refs: ['NICE CG84 gastroenteritis in children', 'NICE NG29 IV fluids', 'Observed: Tawuniya MN-1-1 ×7 (IV admin)'],
   },
   {
     id: 'PRC-INJ', label: 'IM / IV injection administration', match: /i\.?m\.? injection|i\.?v\.? injection|injection \(without|intramuscular|im inj|iv inj/i,
@@ -434,7 +434,7 @@ export const SERVICE_RULES: ServiceRule[] = [
     icd: ['S', 'T2', 'T3', 'T14', 'L02', 'L03', 'L08', 'L89', 'L97', 'L98.4', 'E10.5', 'E10.6', 'E11.5', 'E11.6', 'E11.62', 'E13.6', 'E14.5', 'E14.6', 'Z48', 'T81', 'T79', 'O90', 'L72', 'L05', 'L60', 'Z98', 'I83', 'I87.2'],
     suggest: 'Code the wound (S01–S91 open wound / T2x burn / L97 ulcer / Z48.0 dressing change) plus the external cause, and document size, site, mechanism and date of injury.',
     why: 'Wound care needs a wound/injury/ulcer code. Injury claims require mechanism, place, date and work-related status (CHI injury documentation).',
-    refs: ['ICD-10-AM ACS 2001 (external cause codes)', 'CHI Unified Policy – injuries'],
+    refs: ['ICD-10-AM ACS 1901/2001 (injury & external cause)', 'CHI Unified Policy – injuries'],
   },
   {
     id: 'PRC-EAR', label: 'Ear wash / ear wick / ear packing', match: /ear (wash|wick|packing|syringing|irrigat|toilet|suction)|aural toilet|cerumen|wax remov/i,

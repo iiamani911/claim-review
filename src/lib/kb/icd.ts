@@ -1,7 +1,7 @@
 /**
  * ICD-10 (ICD-10-AM as adopted by CHI/NPHIES) coding-quality rules.
  * Sources: ICD-10-AM Australian Coding Standards (ACS 0001 principal diagnosis, ACS 0002 additional diagnoses,
- * ACS 2001 external causes), WHO ICD-10 Volume 2 sex/age edits, NPHIES code-set validation.
+ * ACS 1901/2001 injuries & external causes), WHO ICD-10 Volume 2 sex/age edits, NPHIES code-set validation.
  */
 
 const starts = (code: string, prefixes: string[]) => prefixes.some((p) => code.startsWith(p));

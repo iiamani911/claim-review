@@ -238,20 +238,3 @@ mark.neg { background: color-mix(in srgb, var(--s1) 20%, transparent); }
 .report > div { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
 .report .ok { border-color: color-mix(in srgb, var(--good) 45%, transparent); background: var(--good-soft); }
 .report .bad { border-color: color-mix(in srgb, var(--crit) 45%, transparent); background: var(--crit-soft); }
-
-/* v2 controls */
-.topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
-.payer-seg button { padding: 6px 14px; font-size: 13px; font-weight: 600; }
-.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-2); min-width: 0; }
-.form-grid .select, .form-grid .input { width: 100%; font-weight: 400; color: var(--ink); }
-.hint { font-weight: 400; color: var(--ink-3); font-size: 11px; }
-.map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px 14px; margin-top: 10px; }
-.map-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-2); }
-.map-grid label.bad span { color: var(--crit); font-weight: 700; }
-.map-grid .select { width: 100%; font-size: 12px; }
-.staged { display: flex; flex-direction: column; gap: 12px; }
-.decision { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface-2); font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
-.choices { display: flex; flex-direction: column; gap: 6px; }
-.tag:not(.tag-med):not(.tag-tech) { background: var(--surface-2); color: var(--ink-2); }
-textarea.input { font-family: var(--font-data); font-size: 13px; resize: vertical; }

@@ -2,94 +2,104 @@ import { useMemo, useState } from 'react';
 import { useData } from '../App';
 import { checkIndication, type DrugMatch } from '../lib/formulary';
 import { AGE_RULES, classesOf, isTopical } from '../lib/kb/drugs';
-import { Empty } from '../ui';
+import { Empty, Sev } from '../ui';
 
-const EDIT_LABEL: Record<string, string> = { PA: 'Prior authorisation', QL: 'Quantity limit', MD: 'Specialist prescriber', AGE: 'Age restriction', ST: 'Step therapy', CU: 'Concurrent use', EU: 'Emergency use', PE: 'Protocol', IP: 'Inpatient' };
-
-interface Resolved { input: string; match: DrugMatch | null; how: string }
+const EDIT_LABEL: Record<string, string> = {
+  PA: 'Prior authorisation', QL: 'Quantity limit', MD: 'Specialist prescriber', AGE: 'Age restriction', ST: 'Step therapy', CU: 'Concurrent use', EU: 'Emergency use', PE: 'Protocol', IP: 'Inpatient',
+};
 
 export default function DrugChecker() {
-  const { formulary, formularySource } = useData();
-  const [drugs, setDrugs] = useState('3103210658\n06285111001021\nAUGMENTIN 625 mg tablet');
-  const [icd, setIcd] = useState('J06.9, R50.9');
-  const [pick, setPick] = useState(0);
-  const icds = icd.toUpperCase().split(/[\s,;]+/).filter((x) => /^[A-Z]\d{2}/.test(x));
-  const resolved: Resolved[] = useMemo(() => {
-    if (!formulary) return [];
-    return drugs.split('\n').map((s) => s.trim()).filter(Boolean).map((input) => {
-      const isCode = /^[\d-]+$/.test(input);
-      const m = isCode ? formulary.lookup(input, input, '') : formulary.lookup('', '', input) ?? formulary.search(input, 1)[0] ?? null;
-      return { input, match: m, how: m ? m.matchedBy : 'Not resolved' };
-    });
-  }, [formulary, drugs]);
-  if (!formulary) return <div className="card"><Empty title="Drug formulary not loaded">Upload the CHI DDF workbook under All files → Reference data.</Empty></div>;
-  const cur = resolved[pick] ?? resolved[0];
+  const { formulary } = useData();
+  const [q, setQ] = useState('pantoprazole');
+  const [icd, setIcd] = useState('K21.9, R51');
+  const [pick, setPick] = useState<DrugMatch | null>(null);
+  const results = useMemo(() => (formulary ? formulary.search(q, 30) : []), [formulary, q]);
+  const drug = pick ?? results[0] ?? null;
+  const icds = icd.toUpperCase().split(/[\s,;]+/).filter(Boolean);
+  const chk = drug ? checkIndication(drug.ingredient, icds) : null;
+
+  if (!formulary) return <div className="card"><Empty title="Loading CHI formulary…" /></div>;
 
   return (
     <>
       <div className="page-head">
         <div>
-          <span className="eyebrow">Source: {formularySource}</span>
+          <span className="eyebrow">CHI Drug Formulary · {formulary.data.version}</span>
           <h1>Drug ↔ ICD checker</h1>
-          <p>Enter one or more drugs (SFDA register number / service code, GTIN, or trade or scientific name, one per line) and the diagnosis codes. Each drug is resolved to its active ingredient and checked against the CHI formulary indications. An unresolved drug is not assumed incompatible.</p>
+          <p>Look up any SFDA product by trade name, scientific name or register number and test it against the diagnosis codes before prescribing or submitting.</p>
         </div>
       </div>
-      <div className="form-grid">
-        <label>Drugs (one per line)<textarea id="dc-drugs" className="input" rows={4} style={{ width: '100%' }} value={drugs} onChange={(e) => { setDrugs(e.target.value); setPick(0); }} /></label>
-        <label>Diagnosis codes (several allowed)<input id="dc-icd" className="input" style={{ width: '100%' }} value={icd} onChange={(e) => setIcd(e.target.value)} placeholder="e.g. J02.9, R50.9" /><span className="hint">{icds.length ? `Checking ${icds.join(', ')}` : 'Enter ICD-10 codes'}</span></label>
+      <div className="filters">
+        <input id="drug-q" className="input" value={q} onChange={(e) => { setQ(e.target.value); setPick(null); }} placeholder="Trade name, scientific name or SFDA register no." aria-label="Drug" />
+        <input id="drug-icd" className="input" value={icd} onChange={(e) => setIcd(e.target.value)} placeholder="ICD codes, e.g. J02.9, R50.9" aria-label="Diagnosis codes" />
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Input</th><th>Resolved ingredient</th><th>How resolved</th><th>Result for {icds.join(', ') || '—'}</th></tr></thead>
-          <tbody>{resolved.map((r, i) => {
-            const chk = r.match ? checkIndication(r.match.ingredient, icds) : null;
-            const verdict = !r.match ? <span className="sev sev-low">Unresolved – cannot assess</span>
-              : !chk!.listed ? <span className="sev sev-medium">Not in CHI indication list</span>
-              : !icds.length ? <span className="faint">enter diagnoses</span>
-              : chk!.matched.length ? <span className="sev sev-clean">Indicated: {chk!.matched.map((m) => m.icd).join(', ')}</span>
-              : <span className="sev sev-critical">No listed indication matches</span>;
-            return (
-              <tr key={r.input + i} className="clickable" aria-selected={i === pick} onClick={() => setPick(i)}>
-                <td className="mono">{r.input}</td>
-                <td>{r.match ? <><b>{r.match.scientific}</b><br /><span className="faint">{r.match.trade}</span></> : <span className="faint">—</span>}</td>
-                <td className="muted">{r.how}</td>
-                <td>{verdict}</td>
-              </tr>
-            );
-          })}</tbody>
-        </table>
-      </div>
-      {cur?.match && (() => {
-        const m = cur.match;
-        const chk = checkIndication(m.ingredient, icds);
-        const cls = [...classesOf(m.scientific + ' ' + m.trade)];
-        const ages = AGE_RULES.filter((x) => x.re.test(m.scientific));
-        return (
-          <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <span className="eyebrow">{m.ingredient.c || 'Pharmacological class not listed'}</span>
-              <h2>{m.scientific}</h2>
-              <span className="muted">{m.trade} · {m.form} · {m.route} · ATC {m.atc || '—'} · resolved by {m.matchedBy}</span>
-            </div>
-            {chk.matched.length > 0 && <p style={{ fontSize: 13 }}><b>Compatibility evidence:</b> {chk.matched.map((x) => `${x.icd} → “${x.indication}”${x.edits ? ` (edits: ${x.edits})` : ''}`).join('; ')}.</p>}
-            {cls.length > 0 && <p style={{ fontSize: 13 }}><b>Safety classes used by the audit:</b> {cls.join(', ')}{isTopical(m.trade, m.route) ? ' (topical)' : ''}</p>}
-            {ages.length > 0 && <ul className="list" style={{ fontSize: 13 }}>{ages.map((x) => <li key={x.effect}>{x.effect}</li>)}</ul>}
-            <div className="table-wrap" style={{ maxHeight: 360, overflowY: 'auto' }}>
-              <table>
-                <thead><tr><th>CHI indication</th><th>ICD-10</th><th>Edits</th></tr></thead>
-                <tbody>{m.ingredient.i.map((x) => (
-                  <tr key={x[0] + x[1]}>
-                    <td>{x[1]}{x[5] ? <span className="faint"> · inpatient</span> : null}{x[3] && <><br /><span className="faint" style={{ fontSize: 11 }}>MDD adult: {x[3]}</span></>}</td>
-                    <td><span className="codes">{x[0].split(',').map((c) => <span className="code" key={c} style={icds.some((y) => y.replace('.', '').startsWith(c.replace('.', '')) || c.replace('.', '').startsWith(y.replace('.', ''))) ? { borderColor: 'var(--good)', background: 'var(--good-soft)' } : undefined}>{c}</span>)}</span></td>
-                    <td className="muted" style={{ fontSize: 12 }}>{x[2].split(/[,\s]+/).filter(Boolean).map((e) => EDIT_LABEL[e] ?? e).join(', ')}</td>
+      <div className="split">
+        <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+          {results.length ? (
+            <table>
+              <thead><tr><th>Product</th><th>Scientific name</th><th>Route</th></tr></thead>
+              <tbody>
+                {results.map((r) => (
+                  <tr key={r.root + r.trade} className="clickable" aria-selected={drug?.trade === r.trade} onClick={() => setPick(r)}>
+                    <td><b>{r.trade}</b><br /><span className="faint">{r.legal}{r.price ? ` · SAR ${r.price}` : ''}</span></td>
+                    <td>{r.scientific}</td>
+                    <td className="muted">{r.route}</td>
                   </tr>
-                ))}</tbody>
-              </table>
+                ))}
+              </tbody>
+            </table>
+          ) : <Empty title="No product found">Try the scientific name or part of the trade name.</Empty>}
+        </div>
+        <div className="detail">
+          {drug && chk && (
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <span className="eyebrow">{drug.ingredient.c || 'Not in CHI indication list'}</span>
+                <h2>{drug.scientific}</h2>
+                <span className="muted">{drug.trade} · {drug.form} · {drug.route} · ATC {drug.atc || '—'}</span>
+              </div>
+              <div className="fix" style={{ background: 'var(--surface-2)', padding: 12, borderRadius: 8 }}>
+                {!icds.length ? <span>Enter diagnosis codes to test.</span>
+                  : !chk.listed ? <span><Sev s="medium" /> Not in the CHI formulary indication list – expect PBM review.</span>
+                  : chk.matched.length ? <span><span className="sev sev-clean">Indicated</span> Covered indication for {chk.matched.map((m) => `${m.icd} (${m.indication}${m.edits ? `; edits ${m.edits}` : ''})`).join(', ')}.</span>
+                  : <span><Sev s="critical" /> Not indicated for {icds.join(', ')}. The payer will reject under MN-1-1 / PBM unless an approved indication is coded.</span>}
+              </div>
+              {(() => {
+                const cls = [...classesOf(drug.scientific + ' ' + drug.trade)];
+                const ages = AGE_RULES.filter((r) => r.re.test(drug.scientific));
+                return (
+                  <>
+                    {cls.length > 0 && <p style={{ fontSize: 13 }}><b>Safety classes:</b> {cls.join(', ')}{isTopical(drug.trade, drug.route) ? ' (topical)' : ''}</p>}
+                    {ages.length > 0 && <ul className="list" style={{ fontSize: 13 }}>{ages.map((a) => <li key={a.effect}>{a.effect}</li>)}</ul>}
+                  </>
+                );
+              })()}
+              <div>
+                <h3 style={{ marginBottom: 6 }}>Approved indications ({drug.ingredient.i.length})</h3>
+                <div className="table-wrap" style={{ maxHeight: 340, overflowY: 'auto' }}>
+                  <table>
+                    <thead><tr><th>Indication</th><th>ICD-10</th><th>Edits</th></tr></thead>
+                    <tbody>
+                      {drug.ingredient.i.map((r) => (
+                        <tr key={r[0] + r[1]}>
+                          <td>{r[1]}{r[5] ? <span className="faint"> · inpatient</span> : null}{r[3] && <><br /><span className="faint" style={{ fontSize: 11 }}>MDD adult: {r[3]}</span></>}</td>
+                          <td><span className="codes">{r[0].split(',').map((c) => <span className="code" key={c} style={icds.some((x) => x.replace('.', '').startsWith(c.replace('.', ''))) ? { borderColor: 'var(--good)', background: 'var(--good-soft)' } : undefined}>{c}</span>)}</span></td>
+                          <td className="muted" style={{ fontSize: 12 }}>{r[2].split(/[,\s]+/).filter(Boolean).map((e) => EDIT_LABEL[e] ?? e).join(', ')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              {drug.ingredient.notes.length > 0 && (
+                <details><summary style={{ cursor: 'pointer', fontWeight: 600 }}>Formulary notes</summary>
+                  <ul className="list" style={{ fontSize: 12, marginTop: 8 }}>{drug.ingredient.notes.map((n) => <li key={n}>{n}</li>)}</ul>
+                </details>
+              )}
             </div>
-            <p className="faint" style={{ fontSize: 12 }}>Source: {formularySource}. A missing indication means the formulary does not list it – it is not proof of clinical incompatibility; insurers may still apply their own rules.</p>
-          </section>
-        );
-      })()}
+          )}
+        </div>
+      </div>
     </>
   );
 }
