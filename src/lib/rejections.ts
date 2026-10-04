@@ -79,7 +79,9 @@ export function parseRejections(t: DetectedTable, source: string): Rejection[] {
 /** Link rejections to audited claims via invoice number → doctor, specialty, ICD, category, date. */
 export function linkRejections(rejections: Rejection[], claims: Claim[]): Rejection[] {
   const byInv = new Map<string, Claim>();
-  for (const c of claims) for (const l of c.lines) if (l.invoice) byInv.set(invKey(l.invoice), c);
+  // Rejected-claim exports (rejection section) win over the same invoice in other sections.
+  const ordered = [...claims.filter((c) => c.section !== 'rejection'), ...claims.filter((c) => c.section === 'rejection')];
+  for (const c of ordered) for (const l of c.lines) if (l.invoice) byInv.set(invKey(l.invoice), c);
   const codeToName = new Map<string, string>();
   const linked = rejections.map((r) => {
     const c = byInv.get(invKey(r.invoice));

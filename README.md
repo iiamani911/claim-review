@@ -2,6 +2,14 @@
 
 A browser platform for the WAD Clinic insurance office. It audits claims medically before they go to NPHIES, and analyses what payers have already rejected. All files are processed in the browser: no patient data leaves the computer.
 
+## Sections
+
+* **Medical audit**: upload the claims you are about to submit. You get the full medical audit, and every claim with a critical or high finding is marked for review.
+* **Rejection analysis**: upload payer statements and the HIS export of the rejected claims. Statements are analysed by cause, service, category and doctor. The rejected claims get the same full audit, and each rejected line shows the audit finding that explains it.
+* **Technical audit**: upload claims for the billing, contract and pre-authorisation checks. Phase 2 will add the payer price lists and contracts.
+* **Files to review**: one list of every marked file, showing file number, patient name and reasons, with a Reviewed status. You can download your uploaded files back with a ⚑ REVIEW column on every flagged row.
+* **Month comparison**: uploads from different months are compared side by side, showing the change from the previous month for key figures, audit areas, top findings, rejection causes and doctors.
+
 ## What it does
 
 **Medical audit (pre-submission).** Each encounter (claim no. + patient + date + doctor) is checked against 57 rules in 8 areas:

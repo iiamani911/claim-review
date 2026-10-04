@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useData } from '../App';
 import type { ClaimAudit, Severity, AuditArea } from '../lib/types';
-import { AREAS, SEVERITY_ORDER } from '../lib/engine';
+import { AREAS, SEVERITY_ORDER, viewAudit, type AuditView } from '../lib/engine';
+import UploadZone from '../UploadZone';
 import { exportFindings } from '../lib/exportXlsx';
 import { Codes, Empty, Icon, Score, Sev, int, sar } from '../ui';
 import ClaimDetail from './ClaimDetail';
@@ -9,8 +10,28 @@ import ClaimDetail from './ClaimDetail';
 type SevFilter = Severity | 'clean';
 const rank = (a: ClaimAudit) => (a.worst ? SEVERITY_ORDER.indexOf(a.worst) : 9);
 
+export const needsReview = (a: ClaimAudit) => a.findings.some((f) => f.severity === 'critical' || f.severity === 'high');
+
 export default function AuditPage() {
-  const { audits, focus } = useData();
+  const { audits } = useData();
+  const mine = useMemo(() => audits.filter((a) => a.claim.section === 'medical').map((a) => viewAudit(a, 'medical')), [audits]);
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">Pre-submission review</span>
+          <h1>Medical audit</h1>
+          <p>Upload the claims you are about to submit. Each encounter is checked for code ↔ service and drug ↔ diagnosis mismatches, vital signs against the history, trauma details (how, when, where, work-related), missing examination, plan and severity, interactions and ICD rules. Claims with a critical or high finding are marked for review with their file number and patient name.</p>
+        </div>
+      </div>
+      <UploadZone section="medical" compact />
+      <AuditWorkspace audits={mine} view="medical" exportName="WAD_medical_audit.xlsx" />
+    </>
+  );
+}
+
+export function AuditWorkspace({ audits, view, exportName, emptyText }: { audits: ClaimAudit[]; view: AuditView; exportName: string; emptyText?: string }) {
+  const { focus, review } = useData();
   const [q, setQ] = useState('');
   const [sevs, setSevs] = useState<Set<SevFilter>>(new Set(['critical', 'high']));
   const [area, setArea] = useState<AuditArea | ''>('');
@@ -43,15 +64,14 @@ export default function AuditPage() {
     return c;
   }, [audits]);
 
+  if (!audits.length) return <div className="card"><Empty title="No encounters in this section yet">{emptyText ?? 'Upload an HIS claim export above.'}</Empty></div>;
+  const marked = audits.filter(needsReview).length;
+
   return (
     <>
-      <div className="page-head">
-        <div>
-          <span className="eyebrow">Pre-submission review</span>
-          <h1>Medical audit</h1>
-          <p>Each encounter is checked against ICD rules, the CHI drug formulary, vital signs, documentation and safety rules. Open a claim to see every finding with the fix and a note the doctor can add.</p>
-        </div>
-        <button className="btn primary" onClick={() => exportFindings(list)} disabled={!list.length}><Icon name="download" />Export {int(list.length)} claims to Excel</button>
+      <div className="filters" style={{ justifyContent: 'space-between' }}>
+        <span className="muted"><b className="num">{int(audits.length)}</b> encounters · <span className="flag-chip">⚑ {int(marked)} marked for review</span></span>
+        <button className="btn primary" onClick={() => exportFindings(list, exportName)} disabled={!list.length}><Icon name="download" />Export {int(list.length)} claims to Excel</button>
       </div>
 
       <div className="filters" role="group" aria-label="Filters">
@@ -90,23 +110,27 @@ export default function AuditPage() {
             <table>
               <thead><tr><th>Claim / date</th><th>Patient · doctor</th><th>Diagnoses</th><th>Risk</th><th className="r">At risk</th></tr></thead>
               <tbody>
-                {list.slice(0, 400).map((a) => <Row key={a.claim.id} a={a} selected={a.claim.id === sel} onClick={() => setSel(a.claim.id)} />)}
+                {list.slice(0, 400).map((a) => <Row key={a.claim.id} a={a} reviewed={review[a.claim.id]?.status === 'reviewed'} selected={a.claim.id === sel} onClick={() => setSel(a.claim.id)} />)}
               </tbody>
             </table>
           ) : <Empty title="No claims match these filters">Clear a filter or select another severity.</Empty>}
           {list.length > 400 && <p className="faint" style={{ padding: 12 }}>Showing first 400 of {int(list.length)}. Narrow the filters or export to Excel.</p>}
         </div>
-        <div className="detail">{selected ? <ClaimDetail a={selected} /> : <div className="card"><Empty title="Select a claim">Pick an encounter on the left to see its findings, vitals, history and the fixes to apply.</Empty></div>}</div>
+        <div className="detail">{selected ? <ClaimDetail a={selected} view={view} /> : <div className="card"><Empty title="Select a claim">Pick an encounter on the left to see its findings, vitals, history and the fixes to apply.</Empty></div>}</div>
       </div>
     </>
   );
 }
 
-function Row({ a, selected, onClick }: { a: ClaimAudit; selected: boolean; onClick: () => void }) {
+function Row({ a, selected, reviewed, onClick }: { a: ClaimAudit; selected: boolean; reviewed: boolean; onClick: () => void }) {
   const c = a.claim;
   return (
     <tr className="clickable" aria-selected={selected} onClick={onClick} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
-      <td><span className="mono">{c.claimNo}</span><br /><span className="faint num">{c.serviceDate}</span></td>
+      <td>
+        {needsReview(a) && <span className={`flag-chip ${reviewed ? 'done' : ''}`} title="Marked for review">{reviewed ? '✓ Reviewed' : '⚑ Review'}</span>}
+        <div className="mono" style={{ marginTop: 2 }}>File {c.mrn}</div>
+        <span className="faint num">Claim {c.claimNo} · {c.serviceDate}</span>
+      </td>
       <td><b>{c.patientName || `MRN ${c.mrn}`}</b> <span className="faint">{c.ageText} {c.gender}</span><br /><span className="muted">{c.physician}</span></td>
       <td><Codes codes={c.diagnoses.map((d) => d.code)} /></td>
       <td><Sev s={a.worst} /><div style={{ marginTop: 4 }}><Score score={a.score} /></div></td>

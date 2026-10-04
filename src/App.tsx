@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import type { ClaimAudit, Rejection, Claim } from './lib/types';
+import type { ClaimAudit, Rejection, Claim, Section } from './lib/types';
 import { Formulary, type FormularyData } from './lib/formulary';
-import { auditAll } from './lib/engine';
+import { auditAll, viewAudit } from './lib/engine';
 import { linkRejections } from './lib/rejections';
-import { demoFiles, loadFiles, saveFiles, type LoadedFile } from './store';
+import { demoFiles, loadFiles, loadReview, moveFile, saveFiles, saveReview, type LoadedFile, type ReviewMap, type ReviewStatus } from './store';
 import { Icon, int } from './ui';
 import Overview from './pages/Overview';
 import ImportPage from './pages/Import';
@@ -12,8 +12,11 @@ import RejectionsPage from './pages/Rejections';
 import DoctorsPage from './pages/Doctors';
 import DrugChecker from './pages/DrugChecker';
 import Rulebook from './pages/Rulebook';
+import TechnicalPage from './pages/Technical';
+import ReviewPage from './pages/Review';
+import ComparePage from './pages/Compare';
 
-export type PageId = 'overview' | 'import' | 'audit' | 'rejections' | 'doctors' | 'drugs' | 'rules';
+export type PageId = 'overview' | 'import' | 'audit' | 'rejections' | 'technical' | 'review' | 'compare' | 'doctors' | 'drugs' | 'rules';
 
 interface DataCtx {
   files: LoadedFile[];
@@ -24,6 +27,9 @@ interface DataCtx {
   isDemo: boolean;
   addFiles: (f: LoadedFile[]) => void;
   removeFile: (id: string) => void;
+  setSection: (id: string, s: Section) => void;
+  review: ReviewMap;
+  setReview: (ids: string[], s: ReviewStatus) => void;
   clearAll: () => void;
   go: (p: PageId, opts?: { claimId?: string; doctor?: string }) => void;
   focus: { claimId?: string; doctor?: string };
@@ -35,11 +41,14 @@ export const useData = () => useContext(Ctx)!;
 const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: 'overview', label: 'Overview', icon: 'overview' },
   { id: 'audit', label: 'Medical audit', icon: 'audit' },
-  { id: 'rejections', label: 'Rejection analytics', icon: 'rejections' },
+  { id: 'rejections', label: 'Rejection analysis', icon: 'rejections' },
+  { id: 'technical', label: 'Technical audit', icon: 'technical' },
+  { id: 'review', label: 'Files to review', icon: 'flag' },
+  { id: 'compare', label: 'Month comparison', icon: 'compare' },
   { id: 'doctors', label: 'Doctors', icon: 'doctors' },
   { id: 'drugs', label: 'Drug ↔ ICD checker', icon: 'drugs' },
   { id: 'rules', label: 'Rulebook & sources', icon: 'rules' },
-  { id: 'import', label: 'Import files', icon: 'import' },
+  { id: 'import', label: 'All files', icon: 'import' },
 ];
 
 const pageFromHash = (): PageId => {
@@ -54,12 +63,14 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [formulary, setFormulary] = useState<Formulary | null>(null);
   const [fError, setFError] = useState('');
+  const [review, setReviewMap] = useState<ReviewMap>({});
 
   useEffect(() => {
     fetch('data/formulary.json')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d: FormularyData) => setFormulary(new Formulary(d)))
       .catch((e) => setFError(String(e)));
+    loadReview().then(setReviewMap);
     loadFiles().then((f) => {
       setFiles(f && f.length ? f : demoFiles());
       setReady(true);
@@ -86,6 +97,14 @@ export default function App() {
       persist(next.length ? next : demoFiles());
     },
     clearAll: () => persist(demoFiles()),
+    setSection: (id, sec) => persist(files.map((f) => (f.id === id ? moveFile(f, sec) : f))),
+    review,
+    setReview: (ids, st) => {
+      const next = { ...review };
+      for (const id of ids) next[id] = { status: st, at: new Date().toISOString() };
+      setReviewMap(next);
+      saveReview(next);
+    },
     go: (p, opts) => {
       setFocus(opts ?? {});
       if (location.hash !== `#${p}`) location.hash = p;
@@ -94,9 +113,12 @@ export default function App() {
     },
   };
 
+  const serious = (a: ClaimAudit) => a.findings.some((f) => f.severity === 'critical' || f.severity === 'high');
   const counts: Partial<Record<PageId, number>> = {
-    audit: audits.filter((a) => a.worst === 'critical' || a.worst === 'high').length,
-    rejections: rejections.length,
+    audit: audits.filter((a) => a.claim.section === 'medical' && serious(viewAudit(a, 'medical'))).length,
+    rejections: rejections.length + audits.filter((a) => a.claim.section === 'rejection').length,
+    technical: audits.filter((a) => a.claim.section === 'technical').length,
+    review: audits.filter((a) => serious(viewAudit(a, a.claim.section === 'technical' ? 'technical' : a.claim.section === 'rejection' ? 'all' : 'medical')) && review[a.claim.id]?.status !== 'reviewed').length,
     doctors: new Set(audits.map((a) => a.claim.physician)).size,
   };
 
@@ -125,8 +147,9 @@ export default function App() {
         <main className="main">
           {isDemo && ready && (
             <div className="banner" role="status">
-              <b>Demo data.</b> Fictional patients and claims are loaded so you can explore. Import your HIS export and payer statements to audit real claims.
-              <button className="btn small primary" onClick={() => ctx.go('import')}>Import files</button>
+              <b>Demo data.</b> Fictional patients (June and July) are loaded so you can explore. Upload your files in Medical audit, Rejection analysis or Technical audit.
+              <button className="btn small primary" onClick={() => ctx.go('audit')}>Upload claims</button>
+              <button className="btn small" onClick={() => ctx.go('rejections')}>Upload rejections</button>
             </div>
           )}
           {fError && <div className="banner">Drug formulary could not be loaded ({fError}). Drug ↔ diagnosis checks are paused; other checks still run.</div>}
@@ -146,5 +169,8 @@ function Page({ id }: { id: PageId }) {
     case 'doctors': return <DoctorsPage />;
     case 'drugs': return <DrugChecker />;
     case 'rules': return <Rulebook />;
+    case 'technical': return <TechnicalPage />;
+    case 'review': return <ReviewPage />;
+    case 'compare': return <ComparePage />;
   }
 }

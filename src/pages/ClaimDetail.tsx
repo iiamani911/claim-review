@@ -1,6 +1,8 @@
 import { Fragment, type ReactNode } from 'react';
 import type { ClaimAudit, Finding, Severity } from '../lib/types';
-import { AREAS, SEVERITY_ORDER } from '../lib/engine';
+import { AREAS, SEVERITY_ORDER, type AuditView } from '../lib/engine';
+import { useData } from '../App';
+import { SECTION_LABEL } from '../store';
 import { TERMS, negatedAt } from '../lib/text';
 import { CopyButton, Score, Sev, sar, sevColor } from '../ui';
 
@@ -33,8 +35,11 @@ export function doctorQuery(a: ClaimAudit): string {
   ].join('\n');
 }
 
-export default function ClaimDetail({ a }: { a: ClaimAudit }) {
+export default function ClaimDetail({ a, view = 'all' }: { a: ClaimAudit; view?: AuditView }) {
   const c = a.claim;
+  const { review, setReview } = useData();
+  const marked = a.findings.some((f) => f.severity === 'critical' || f.severity === 'high');
+  const reviewed = review[c.id]?.status === 'reviewed';
   const v = c.vitals;
   const lineSev = new Map<string, Severity>();
   for (const f of a.findings) for (const id of f.lineIds ?? []) {
@@ -66,6 +71,18 @@ export default function ClaimDetail({ a }: { a: ClaimAudit }) {
           <div className="num" style={{ marginTop: 4 }}>{sar(a.amountAtRisk, 2)} at risk</div>
         </div>
       </div>
+
+      {marked && (
+        <div className={`marker ${reviewed ? 'done' : ''}`} role="status">
+          <span className="marker-flag">{reviewed ? '✓' : '⚑'}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <b>{reviewed ? 'Reviewed' : 'This file should be reviewed'}</b>
+            <div className="mono" style={{ fontSize: 13 }}>File {c.mrn} · {c.patientName || 'name not recorded'} · Claim {c.claimNo}</div>
+            <span className="faint" style={{ fontSize: 12 }}>{SECTION_LABEL[c.section ?? 'medical']}{view === 'technical' ? ' · technical findings' : view === 'medical' ? ' · medical findings' : ''}{reviewed ? ` · marked reviewed ${review[c.id].at.slice(0, 10)}` : ''}</span>
+          </div>
+          <button className="btn small" onClick={() => setReview([c.id], reviewed ? 'open' : 'reviewed')}>{reviewed ? 'Reopen' : 'Mark reviewed'}</button>
+        </div>
+      )}
 
       <div className="vitals" aria-label="Vital signs">
         {vit.map(([k, val, bad]) => (

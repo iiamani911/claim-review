@@ -433,14 +433,30 @@ export function auditClaim(claim: Claim, formulary: Formulary | null, history: C
     }
   }
 
+  return finalize(claim, findings);
+}
+
+/** Score, worst severity and SAR at risk for a set of findings on one claim. */
+export function finalize(claim: Claim, all: Finding[]): ClaimAudit {
+  const findings = [...all].sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity));
+  const total = claim.lines.reduce((s, l) => s + lineAmount(l), 0);
   // Probability-style score: each finding independently adds its severity's rejection likelihood.
   const score = Math.round(100 * (1 - findings.reduce((p, f) => p * (1 - SEVERITY_WEIGHT[f.severity] / 100), 1)));
-  const flagged = new Set(findings.filter((f) => f.severity === 'critical' || f.severity === 'high').flatMap((f) => f.lineIds ?? []));
-  const claimLevel = findings.filter((f) => (f.severity === 'critical' || f.severity === 'high') && !f.lineIds?.length).reduce((m, f) => Math.max(m, f.amountAtRisk), 0);
+  const serious = findings.filter((f) => f.severity === 'critical' || f.severity === 'high');
+  const flagged = new Set(serious.flatMap((f) => f.lineIds ?? []));
+  const claimLevel = serious.filter((f) => !f.lineIds?.length).reduce((m, f) => Math.max(m, f.amountAtRisk), 0);
   const lineRisk = claim.lines.filter((l) => flagged.has(l.id)).reduce((s, l) => s + lineAmount(l), 0);
   const amountAtRisk = Math.round(Math.min(total, Math.max(claimLevel, lineRisk)) * 100) / 100;
-  findings.sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity));
   return { claim, findings, score, amountAtRisk, worst: findings[0]?.severity ?? null };
+}
+
+/** Rules about contracts, codes, approvals and billing mechanics – shown in the Technical audit. */
+export const TECHNICAL_RULES = new Set(['FUP-001', 'FUP-002', 'FUP-003', 'SVC-007', 'DDX-003', 'DDX-005', 'COD-001', 'COD-004', 'SVC-010']);
+export type AuditView = 'medical' | 'technical' | 'all';
+
+export function viewAudit(a: ClaimAudit, view: AuditView): ClaimAudit {
+  if (view === 'all') return a;
+  return finalize(a.claim, a.findings.filter((f) => (view === 'technical') === TECHNICAL_RULES.has(f.ruleId)));
 }
 
 function mentionPositiveAny(text: string, re: RegExp): boolean {

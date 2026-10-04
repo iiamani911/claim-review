@@ -67,7 +67,9 @@ const VISITS: Visit[] = [
 export function demoClaimRecords(): Record<string, string>[] {
   const out: Record<string, string>[] = [];
   let inv = 20269000100;
-  for (const v of VISITS) {
+  // A smaller June batch so the month comparison has something to compare.
+  const june: Visit[] = VISITS.slice(2, 10).map((v) => ({ ...v, claim: v.claim.replace('D-1', 'D-0'), mrn: `${v.mrn}J`, name: `${v.name} (June)`, date: v.date.replace('-07-', '-06-') }));
+  for (const v of [...june, ...VISITS]) {
     for (const l of v.lines) {
       inv++;
       const dx = (i: number) => v.icd[i] ?? ['-1', '-1'];

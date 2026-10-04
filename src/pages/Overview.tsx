@@ -29,7 +29,7 @@ export default function Overview() {
         <Kpi label="Encounters audited" value={int(s.encounters)} sub={`${sar(s.billed)} billed (net)`} tone="accent" />
         <Kpi label="Clean-claim rate" value={pct(s.cleanRate)} sub={`${int(s.clean)} with no critical/high finding`} tone="good" />
         <Kpi label="Amount at risk" value={sar(s.amountAtRisk)} sub="lines with critical/high findings" tone="crit" />
-        <Kpi label="Critical findings" value={int(s.bySeverity.critical)} sub={`${int(s.bySeverity.high)} high · ${int(s.bySeverity.medium)} medium`} tone="high" />
+        <Kpi label="Files marked for review" value={<button className="btn ghost" style={{ padding: 0, font: 'inherit' }} onClick={() => go('review')}>{int(s.encounters - s.clean)} ⚑</button>} sub={`${int(s.bySeverity.critical)} critical · ${int(s.bySeverity.high)} high findings`} tone="high" />
         <Kpi label="Already rejected" value={sar(r.amount)} sub={`${int(r.lines)} lines · ${pct(r.amount ? r.medical / r.amount : 0)} medical`} />
       </section>
 

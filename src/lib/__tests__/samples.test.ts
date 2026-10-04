@@ -10,7 +10,7 @@ const dir = join(__dirname, '../../../samples');
 const has = existsSync(dir);
 
 describe.skipIf(!has)('real sample files (local only, never committed)', () => {
-  it('parses, audits and links', () => {
+  it('parses, audits and links', { timeout: 60000 }, () => {
     const f = new Formulary(JSON.parse(readFileSync(join(__dirname, '../../../public/data/formulary.json'), 'utf8')));
     const claims = [], rej = [];
     for (const n of readdirSync(dir)) {

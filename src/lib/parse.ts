@@ -15,7 +15,7 @@ export interface DetectedTable {
   records: Record<string, string>[];
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+export const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /** Turns a cell into a trimmed string; "-1" (HIS null marker) stays as-is for callers to decide. */
 function cellText(v: unknown): string {
@@ -163,6 +163,16 @@ function cleanIcd(c: string): string {
   return c.toUpperCase().replace(/\s+/g, '').replace(/[^A-Z0-9.]/g, '');
 }
 
+/** Encounter identity of an export row: claim no + MRN + service date + physician. */
+export function encounterKey(r: Record<string, string>): string {
+  return [
+    pick(r, 'ClaimNo', 'Claim No', 'Claim Number', 'Visit No'),
+    pick(r, 'MRN', 'File No', 'Patient File No'),
+    parseDate(pick(r, 'Service date', 'Date of admission')),
+    pick(r, 'Physician Id', 'Doctor Code', 'Physician name'),
+  ].join('|');
+}
+
 /** Groups HIS claim-export rows (one row per service line) into claims. */
 export function buildClaims(records: Record<string, string>[], sourceFile: string): Claim[] {
   const byClaim = new Map<string, Claim>();
@@ -171,8 +181,7 @@ export function buildClaims(records: Record<string, string>[], sourceFile: strin
     if (!claimNo) return;
     const mrn = pick(r, 'MRN', 'File No', 'Patient File No');
     const date = parseDate(pick(r, 'Service date', 'Date of admission'));
-    const phys = pick(r, 'Physician Id', 'Doctor Code', 'Physician name');
-    const key = [claimNo, mrn, date, phys].join('|');
+    const key = encounterKey(r);
     const pairs: [string, string][] = [
       ['ICD1', 'diag desc'], ['initial diag', 'initial diag descr'], ['diag 2', 'diag 2 desc'],
       ['diag 3 code', 'diag 3 desc'], ['diag 3', 'diag 3 desc'], ['diag 4', 'diag 4 desc'], ['diag 5', 'diag 5 desc'],

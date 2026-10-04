@@ -212,3 +212,24 @@ mark.neg { background: color-mix(in srgb, var(--s1) 20%, transparent); }
   .hbar { grid-template-columns: minmax(90px, 40%) minmax(0, 1fr) auto; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* Review markers */
+.flag-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 5px; background: var(--crit-soft); color: var(--crit); white-space: nowrap; }
+.flag-chip.done { background: var(--good-soft); color: var(--good); }
+.marker { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--crit) 40%, transparent); background: var(--crit-soft); }
+.marker.done { border-color: color-mix(in srgb, var(--good) 40%, transparent); background: var(--good-soft); }
+.marker-flag { width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; background: var(--crit); color: #fff; font-weight: 800; flex: none; }
+.marker.done .marker-flag { background: var(--good); }
+.upload-zone { display: flex; flex-direction: column; gap: 10px; }
+.drop.compact { padding: 16px 18px; flex-direction: row; justify-content: flex-start; gap: 14px; text-align: left; }
+.drop.compact svg { width: 26px; height: 26px; flex: none; }
+.file-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.file-chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 3px 4px 3px 10px; font-size: 12px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tabs button { border: 0; background: none; padding: 9px 14px; cursor: pointer; font-weight: 600; color: var(--ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.delta { font-family: var(--font-data); font-size: 11px; margin-left: 6px; white-space: nowrap; }
+.delta.worse { color: var(--crit); }
+.delta.better { color: var(--good); }
+.delta.same { color: var(--ink-3); }
+.phase-note { border: 1px dashed var(--line); border-radius: var(--r); padding: 14px 16px; background: var(--surface-2); font-size: 13px; color: var(--ink-2); }

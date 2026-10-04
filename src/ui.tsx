@@ -18,6 +18,9 @@ const ICONS: Record<string, string> = {
   upload: 'M12 16V4m0 0-4 4m4-4 4 4M4 20h16',
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13',
   close: 'M6 6l12 12M18 6 6 18',
+  technical: 'M4 6h16M4 12h10M4 18h7M17 15l2 2 3-4',
+  flag: 'M5 21V4m0 0h11l-2 4 2 4H5',
+  compare: 'M4 20V8m6 12V4m6 16v-9m6 9V6',
 };
 
 export function Icon({ name }: { name: string }) {

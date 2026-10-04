@@ -1,3 +1,6 @@
+/** Where a file was uploaded: it decides how the platform treats it. */
+export type Section = 'medical' | 'rejection' | 'technical';
+
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
 export type AuditArea =
@@ -71,6 +74,9 @@ export interface Claim {
   onsetFlag: string;
   lines: ServiceLine[];
   sourceFile: string;
+  /** Upload area the file came from (medical audit, rejected claims, technical audit). */
+  section?: Section;
+  sourceFileId?: string;
 }
 
 export interface Finding {
