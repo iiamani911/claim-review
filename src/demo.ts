@@ -2,7 +2,9 @@
  * Synthetic demo dataset (fictional patients, doctors and claim numbers) so the platform opens in a working
  * state. It mirrors the WAD Clinic HIS export and the Tawuniya statement layouts. No real patient data.
  */
-import type { DetectedTable } from './lib/parse';
+import type { Payer } from './lib/types';
+import { CLAIM_FIELDS, autoMap, rowHash } from './lib/parse';
+import type { ImportBundle, ImportMeta, StoredRow } from './db';
 
 type Line = [category: string, code: string, desc: string, net: number, units?: number];
 interface Visit {
@@ -64,48 +66,72 @@ const VISITS: Visit[] = [
     hx: 'Abdominal pain.', lines: [CONS, ['Laboratory', 'LA0401', 'BHCG QUANTITATIVE', 70], ['Radiology', 'XY0110', 'ULTRASOUND OF ABDOMEN', 115]] },
 ];
 
-export function demoClaimRecords(): Record<string, string>[] {
-  const out: Record<string, string>[] = [];
-  let inv = 20269000100;
-  // A smaller June batch so the month comparison has something to compare.
-  const june: Visit[] = VISITS.slice(2, 10).map((v) => ({ ...v, claim: v.claim.replace('D-1', 'D-0'), mrn: `${v.mrn}J`, name: `${v.name} (June)`, date: v.date.replace('-07-', '-06-') }));
-  for (const v of [...june, ...VISITS]) {
-    for (const l of v.lines) {
-      inv++;
-      const dx = (i: number) => v.icd[i] ?? ['-1', '-1'];
-      out.push({
-        mrn: v.mrn, name: v.name, gender: v.gender, age: v.age, maritalstatus: 'Single', nationality: 'Saudi', claimno: v.claim,
-        inscompname: 'tawuniya insurance companies', policyholder: 'DEMO EMPLOYER', membershipno: `00${v.mrn}`, classname: 'A', approvalno: v.approval ?? '-1',
-        encountertype: 'O', invoice: String(inv), dateofsubmission: v.date.split('-').reverse().join('-'), physicianid: v.doc[0], physicianname: v.doc[1], drsspeciality: v.doc[2],
-        servicecategory: l[0], servicecode: l[1], servicedescription: l[2], serviceunits: String(l[4] ?? 1), billedamount: String(l[3]), netamount: String(l[3]), patientpayamount: '0',
-        icd1: dx(0)[0], diagdesc: dx(0)[1], diag2: dx(1)[0], diag2desc: dx(1)[1], diag3code: dx(2)[0], diag3desc: dx(2)[1],
-        servicedate: v.date.split('-').reverse().join('-'), bp: v.vit[0] || '-1', temperature: v.vit[1] || '-1', pulse: v.vit[2] || '-1', respiratoryrate: v.vit[3] || '-1', height: v.vit[4] || '-1', weight: v.vit[5] || '-1',
-        lmp: v.lmp ?? '-1', chiefcomplaint: v.hx, toothnumber: v.tooth ?? '-1', gtin: '-1',
-      });
-    }
-  }
-  return out;
+const HIS_HEADER = ['MRN', 'Name', 'gender', 'Age', 'ClaimNo', 'ins comp name', 'approval no', 'Encounter Type', 'INVOICE', 'Physician Id', 'Physician name', 'Drs speciality', 'ServiceCategory', 'service code', 'ServiceDescription', 'ServiceUnits', 'BilledAmount', 'PatientPayAmount', 'Discount', 'Net amount', 'Net Vat', 'ICD1', 'diag desc', 'diag 2', 'diag 2 desc', 'diag 3 code', 'diag 3 desc', 'Service date', 'BP', 'Temperature', 'pulse', 'Respiratory Rate', 'Height', 'Weight', 'LMP', 'Chief complaint', 'Tooth Number', 'GTIN'];
+const PAYER_NAME: Record<Payer, string> = { Bupa: 'BUPA ARABIA FOR COOPERATIVE INSURANCE', Tawuniya: 'tawuniya insurance companies' };
+
+function meta(id: string, filename: string, fileType: ImportMeta['fileType'], layout: ImportMeta['layout'], payer: Payer, periods: string[], header: string[], rows: StoredRow[]): ImportMeta {
+  return {
+    id, filename, fileType, layout, payer, payerBasis: 'Demo data', periods, uploadedAt: '2026-08-01T00:00:00.000Z', format: 'tsv', sheet: 'Demo', headerRow: 2, header,
+    mapping: fileType === 'claims' ? autoMap(header, CLAIM_FIELDS) : null, rowsRead: rows.length, imported: rows.length, skipped: 0, duplicates: 0, errors: [], warnings: [],
+    status: 'active', fingerprint: id, demo: true,
+  };
 }
 
-/** Statement lines referencing demo invoices (looked up by description). */
-export function demoRejectionTable(): DetectedTable {
-  const recs = demoClaimRecords();
-  const inv = (claim: string, date: string, desc: RegExp) => '40' + (recs.find((r) => r.claimno === claim && r.servicedate === date.split('-').reverse().join('-') && desc.test(r.servicedescription))?.invoice ?? '');
-  const row = (claim: string, date: string, desc: RegExp, service: string, code: string, amount: number, reason: string, status = '', comments = '') => ({
-    waseelbatch: 'DEMO-07', doctorcode: '', claimno: `N-${claim}`, servicecode: code, service, exceedprice: '0', rejectedamount: String(amount), invoicenumber: inv(claim, date, desc), reason, status, comments,
+/** Fictional June/July batches for both insurers, with one statement per insurer for July. */
+export function demoBundles(): ImportBundle[] {
+  const june: Visit[] = VISITS.slice(2, 10).map((v) => ({ ...v, claim: '-1', mrn: `${v.mrn}J`, name: `${v.name} (June)`, date: v.date.replace('-07-', '-06-') }));
+  const TAW = new Set(['DM-02', 'DM-05', 'DM-06', 'DM-09', 'DM-11']);
+  const payerOf = (v: Visit): Payer => (TAW.has(v.mrn.replace(/J$/, '')) ? 'Tawuniya' : 'Bupa');
+  const rows: StoredRow[] = [];
+  let inv = 20269000100;
+  let rowNo = 2;
+  const invoiceOf = new Map<string, string>();
+  [...june, ...VISITS].forEach((v) => {
+    const payer = payerOf(v);
+    for (const l of v.lines) {
+      inv++;
+      rowNo++;
+      const dx = (k: number) => v.icd[k] ?? ['-1', '-1'];
+      const values: Record<string, string> = {
+        MRN: v.mrn, Name: v.name, gender: v.gender, Age: v.age, ClaimNo: '-1', 'ins comp name': PAYER_NAME[payer], 'approval no': v.approval ?? '-1', 'Encounter Type': 'O',
+        INVOICE: String(inv), 'Physician Id': v.doc[0], 'Physician name': v.doc[1], 'Drs speciality': v.doc[2], ServiceCategory: l[0], 'service code': l[1], ServiceDescription: l[2],
+        ServiceUnits: String(l[4] ?? 1), BilledAmount: String(l[3]), PatientPayAmount: '0', Discount: '0', 'Net amount': String(l[3]), 'Net Vat': '0',
+        ICD1: dx(0)[0], 'diag desc': dx(0)[1], 'diag 2': dx(1)[0], 'diag 2 desc': dx(1)[1], 'diag 3 code': dx(2)[0], 'diag 3 desc': dx(2)[1],
+        'Service date': v.date.split('-').reverse().join('-'), BP: v.vit[0] || '-1', Temperature: v.vit[1] || '-1', pulse: v.vit[2] || '-1', 'Respiratory Rate': v.vit[3] || '-1',
+        Height: v.vit[4] || '-1', Weight: v.vit[5] || '-1', LMP: v.lmp ?? '-1', 'Chief complaint': v.hx, 'Tooth Number': v.tooth ?? '-1', GTIN: '-1',
+      };
+      invoiceOf.set(`${v.mrn}|${v.date}|${l[2]}`, String(inv));
+      rows.push({ rowNo, values, hash: rowHash(values), payer });
+    }
   });
-  const records = [
-    row('D-1001', '2026-07-03', /CBC/, 'Complete Blood Cell Count Automated Test', '73100-00-90', 36, 'Service is not clinically justified based on clinical practice guideline, without additional supporting diagnosis', 'DISAGREED', 'CBC to assess bacterial infection.'),
-    row('D-1001', '2026-07-03', /INFUSION/, 'Iv Admin Of Pharmac Agent Electrolyte (I.V. Infusion)', '96199-08-00', 43.2, 'Service is not clinically justified based on clinical practice guideline, without additional supporting diagnosis'),
-    row('D-1001', '2026-07-03', /PARACETAMOL/, 'Paracetamol/Parafusive Injection 10 Mg/1ml, 100ml/Bottle', '0901256574', 6, 'Out Of Price List'),
-    row('D-1001', '2026-07-03', /Pantrox/, 'Pantrox 40 mg Ampoule', '3103210658', 6.5, 'Medication 3103210658 is not indicated with diagnosis code J06.9,Medication 3103210658 is not indicated with diagnosis code R50.9'),
-    row('D-1001', '2026-07-08', /Consultation/, 'Office Assessment By General Practitioner', '83600-00-00', 24, 'Same Physicain'),
-    row('D-1002', '2026-07-05', /grouping/, 'Blood Typing Serologic Rh Phenotyping Complete', '73250-01-30', 16.8, 'Service is not clinically justified based on clinical practice guideline, without additional supporting diagnosis', 'DISAGREED', 'Mandatory antenatal investigation.'),
-    row('D-1003', '2026-07-06', /AZIMAC/, 'Azimac 500 mg Tablet', '1111246173', 28, 'Medication 1111246173 is not indicated with diagnosis code J00'),
-    row('D-1007', '2026-07-12', /Magnetic/, 'MRI lumbar spine', '56219-00-00', 720, 'Preauthorization is required and was not obtained'),
-    row('D-1007', '2026-07-12', /XEFO/, 'Xefo Injection 8mg', '3006222294', 16.5, 'Out Of Price List'),
-    row('D-1011', '2026-07-16', /AZIMAC/, 'Azimac 500 mg Tablet', '1111246173', 28, 'Medication 1111246173 is not indicated with diagnosis code G43.9', 'AGREED'),
-    row('D-1012', '2026-07-17', /NAN/, 'Nestle Nan Supreme Pro 1', 'COSM0805', 65, 'Out Of Price List'),
+  const claims: ImportBundle = { meta: { ...meta('demo-claims', 'DEMO_his_export_06-07-2026.xls', 'claims', 'his-claims', 'Bupa', ['2026-06', '2026-07'], HIS_HEADER, rows), payer: null, payerBasis: 'Per row from the insurer column (demo)' }, rows };
+
+  const find = (mrn: string, date: string, desc: RegExp) => [...invoiceOf.entries()].find(([k]) => k.startsWith(`${mrn}|${date}|`) && desc.test(k.split('|')[2]))?.[1] ?? '';
+  const waseelHeader = ['Waseel Batch', 'Doctor Code', 'Claim No.', 'Service Code', 'Service', 'Exceed Price', 'Rejected Amount', 'Invoice Number', 'Reason', 'Status', 'Comments'];
+  const tw: StoredRow[] = [];
+  const bp: StoredRow[] = [];
+  const w = (mrn: string, date: string, desc: RegExp, service: string, code: string, amount: number, reason: string) => {
+    const values = { 'Waseel Batch': 'DEMO-07', 'Doctor Code': '', 'Claim No.': `N-${mrn}`, 'Service Code': code, Service: service, 'Exceed Price': '0', 'Rejected Amount': String(amount), 'Invoice Number': `40${find(mrn, date, desc)}`, Reason: reason, Status: '', Comments: '' };
+    tw.push({ rowNo: tw.length + 2, values, hash: rowHash(values), payer: 'Tawuniya' });
+  };
+  const bupaHeader = ['CLAIM_ID', 'INV_NO', 'INCUR_DATE_FROM', 'ICD Code', 'SERV_CODE', 'SERV_DESC', 'REJ_DESC', 'REJ_CODE', 'nphies rejection code ', 'nphies denial description ', 'BATCH_ID', 'Reject_Amount', 'VAT_REJ_AMT'];
+  const b = (mrn: string, date: string, desc: RegExp, service: string, code: string, amount: number, vat: number, rej: string, rejCode: string, nph: string, denial: string) => {
+    const values = { CLAIM_ID: `B-${mrn}`, INV_NO: `40${find(mrn, date, desc)}`, INCUR_DATE_FROM: date, 'ICD Code': '', SERV_CODE: code, SERV_DESC: service, REJ_DESC: rej, REJ_CODE: rejCode, 'nphies rejection code ': nph, 'nphies denial description ': denial, BATCH_ID: 'DEMO-B07', Reject_Amount: String(amount), VAT_REJ_AMT: String(vat) };
+    bp.push({ rowNo: bp.length + 2, values, hash: rowHash(values), payer: 'Bupa' });
+  };
+  w('DM-02', '2026-07-05', /grouping/, 'Blood Typing Serologic Rh Phenotyping Complete', '73250-01-30', 16.8, 'Service is not clinically justified based on clinical practice guideline, without additional supporting diagnosis');
+  w('DM-05', '2026-07-10', /DRESSING/, 'Dressing medium wound', '30055-00-20', 40, 'Out Of Price List');
+  w('DM-11', '2026-07-16', /AZIMAC/, 'Azimac 500 mg Tablet', '1111246173', 28, 'Medication 1111246173 is not indicated with diagnosis code G43.9');
+  b('DM-01', '2026-07-03', /INFUSION/, 'IV admin of pharmac agent electrolyte', '96199-08-00', 43.2, 6.48, 'Service is not clinically justified', '230.6', 'MN-1-1', 'Service is not clinically justified based on clinical practice guideline, without additional supporting diagnosis');
+  b('DM-01', '2026-07-03', /Pantrox/, 'Pantrox,40,powder for solution for injection,1', '3103210658', 6.5, 0, 'Medication PANTROX (3103210658) is not indicated with diagnosis code J06.9 J06.9,R50.9', '230.6', 'MN-1-1', 'Service is not clinically justified based on clinical practice guideline, without additional supporting diagnosis');
+  b('DM-01', '2026-07-08', /Consultation/, 'GP Consultation', '83600-00-00', 24, 3.6, 'Consultation within the free follow up period', '23', 'CV-1-9', 'Consultation is within 14-day follow up period');
+  b('DM-07', '2026-07-12', /Magnetic/, 'MRI lumbar spine', '56219-00-00', 720, 108, 'Already rejected/Cancelled at preauthorization', '142', 'BE-1-4', 'Preauthorization is required and was not obtained');
+  b('DM-03', '2026-07-06', /AZIMAC/, 'AZIMAC 500MG TABLET', '1111246173', 28, 0, 'Medication AZIMAC (1111246173) is not indicated with diagnosis code J00 J00', '230.6', 'MN-1-1', 'Service is not clinically justified based on clinical practice guideline, without additional supporting diagnosis');
+  const bupaDeductible = { CLAIM_ID: '', INV_NO: '', INCUR_DATE_FROM: '', 'ICD Code': '', SERV_CODE: '', SERV_DESC: '', REJ_DESC: 'Deductible difference', REJ_CODE: '340', 'nphies rejection code ': 'BE-1-1', 'nphies denial description ': 'Co-pay was not collected from member', BATCH_ID: 'DEMO-B07', Reject_Amount: '12.5', VAT_REJ_AMT: '1.88' };
+  bp.push({ rowNo: bp.length + 2, values: bupaDeductible, hash: rowHash(bupaDeductible), payer: 'Bupa' });
+  return [
+    claims,
+    { meta: meta('demo-taw', 'DEMO_Tawuniya_statement_07-2026.xlsx', 'rejections', 'tawuniya-waseel', 'Tawuniya', ['2026-07'], waseelHeader, tw), rows: tw },
+    { meta: meta('demo-bupa', 'DEMO_Bupa_CLPROVSTM_07-2026.xlsx', 'rejections', 'bupa-clprovstm', 'Bupa', ['2026-07'], bupaHeader, bp), rows: bp },
   ];
-  return { kind: 'rejections-waseel', sheet: 'Demo statement', header: [], records };
 }

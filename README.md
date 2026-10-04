@@ -2,13 +2,41 @@
 
 A browser platform for the WAD Clinic insurance office. It audits claims medically before they go to NPHIES, and analyses what payers have already rejected. All files are processed in the browser: no patient data leaves the computer.
 
-## Sections
+## Sections (v2)
 
-* **Medical audit**: upload the claims you are about to submit. You get the full medical audit, and every claim with a critical or high finding is marked for review.
-* **Rejection analysis**: upload payer statements and the HIS export of the rejected claims. Statements are analysed by cause, service, category and doctor. The rejected claims get the same full audit, and each rejected line shows the audit finding that explains it.
-* **Technical audit**: upload claims for the billing, contract and pre-authorisation checks. Phase 2 will add the payer price lists and contracts.
-* **Files to review**: one list of every marked file, showing file number, patient name and reasons, with a Reviewed status. You can download your uploaded files back with a ⚑ REVIEW column on every flagged row.
-* **Month comparison**: uploads from different months are compared side by side, showing the change from the previous month for key figures, audit areas, top findings, rejection causes and doctors.
+The hospital works with two insurers, **Bupa** and **Tawuniya**. A global selector (Bupa / Tawuniya / Both) filters every section; "Both" is a combined view, never a third payer.
+
+1. **Rejection analysis** (landing page). Actual payer rejections per insurer and month:
+   * Rejected net amount and line count.
+   * VAT, only where the statement gives it per line.
+   * Medical vs Technical/Administrative split, with subcategories.
+   * Top services and medications, ranked by amount or by frequency.
+   * Original reasons and codes.
+   * Doctors and specialties.
+   * Monthly trends, with a check that Both = Bupa + Tawuniya.
+   * Rejected lines, each classification editable while the original reason is kept.
+   * Historical patterns.
+
+   Patient share, deductibles and price differences are reported separately, not as rejections. Rejection rates appear only when a claims file exists for the same insurer and month.
+2. **Medical audit**. Pre-submission findings for every encounter, with the source file and row, evidence, finding type, rule type and scope. It also holds the flagged-claims list (review status and marked-file download), the technical and administrative checks, and a "What was checked" panel: checks that need missing reference data show "Unable to verify".
+3. **Doctors**. Volume, actual rejections and audit findings, kept separate, with drill-down to each encounter.
+4. **Drug ↔ ICD checker**. Several drugs (SFDA code, GTIN or name) against several diagnoses, showing the resolved ingredient, the evidence and the formulary source/version.
+5. **Rulebook & sources**. Every rule with its type (hospital / official reference / insurer reference / historical pattern), scope, source, version and last-verified date. It also covers proposed rules (manual acceptance), the reference datasets, the service criteria, the interactions and the rejection classification.
+6. **All files**. Multi-file upload with:
+   * Detection of the real file format and header row.
+   * File type, insurer and period detection, editable before import.
+   * Column mapping.
+   * Duplicate and overlap detection, with an explicit choice: skip, add only new rows, replace an earlier import, or add everything.
+   * Import results (rows read / imported / skipped / duplicates / errors) and a searchable file table.
+   * Storage information and backup/restore.
+
+### Encounter grouping
+
+The HIS `ClaimNo` is often `-1`, so it is never used for grouping. An encounter is **insurer + MRN + service date + physician + encounter type**. On the June and July 2026 exports, invoices never spanned two such groups, and one encounter usually carries about 1.9 invoices. Groups with different complaints, different diagnosis sets or repeated consultations get the "grouping needs review" flag.
+
+### Storage
+
+Imports, their original rows (file name, row number, insurer, period, original cell values) and reviewer decisions are stored in **IndexedDB in this browser on this device**. They survive refresh and reopening, but are not shared with other users, browsers or devices, and are deleted if the site data is cleared. Use *All files → Storage & backup* to download a backup after each import.
 
 ## What it does
 

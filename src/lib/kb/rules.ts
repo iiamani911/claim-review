@@ -1,4 +1,6 @@
-import type { AuditArea, Severity } from '../types';
+import type { AuditArea, RuleScope, Severity } from '../types';
+
+export type RuleType = 'Official reference rule' | 'Hospital rule' | 'Insurer reference rule' | 'Historical pattern';
 
 export interface RuleMeta {
   id: string;
@@ -7,6 +9,30 @@ export interface RuleMeta {
   severity: Severity | 'varies';
   what: string;
   source: string;
+  type?: RuleType;
+  scope?: RuleScope | 'Per insurer';
+  version?: string;
+}
+
+/** Version label of the hospital rule set authored in this tool. */
+export const HOSPITAL_RULES_VERSION = 'Hospital rule set v2 · 2026-10-04';
+export const DDF_VERSION = 'CHI DDF 12 Jan 2025 (file supplied by the hospital)';
+
+export function ruleType(id: string): RuleType {
+  if (/^DDX-00[1245]$/.test(id)) return 'Official reference rule';
+  if (/^TEC-(PRICE|PA)/.test(id)) return 'Insurer reference rule';
+  if (/^HIST/.test(id)) return 'Historical pattern';
+  return 'Hospital rule';
+}
+export function ruleScope(id: string): RuleScope | 'Per insurer' {
+  return /^TEC-(PRICE|PA)|^HIST/.test(id) ? 'Per insurer' : 'Shared';
+}
+export function ruleVersion(id: string): string {
+  const t = ruleType(id);
+  if (t === 'Official reference rule') return DDF_VERSION;
+  if (t === 'Insurer reference rule') return 'Version of the uploaded insurer file';
+  if (t === 'Historical pattern') return 'Recomputed from imported records';
+  return HOSPITAL_RULES_VERSION;
 }
 
 /** Catalogue shown in the Rulebook. Severity is the default; some rules escalate per case. */
@@ -65,9 +91,15 @@ export const RULES: RuleMeta[] = [
   { id: 'COD-007', name: 'Non-covered or non-specific diagnosis', area: 'ICD coding quality', severity: 'varies', what: 'Routine check-up, fitness exam, infertility, cosmetic.', source: 'CHI Unified Policy' },
   { id: 'COD-008', name: 'Injury without external-cause code', area: 'ICD coding quality', severity: 'medium', what: 'V01–Y98 + place + activity.', source: 'ACS 2001' },
   { id: 'COD-009', name: 'Pregnancy: condition not coded to chapter 15', area: 'ICD coding quality', severity: 'high', what: 'UTI in pregnancy is O23, anaemia O99.0…', source: 'ACS 1500' },
-  { id: 'FUP-001', name: 'Consultation within 14-day free follow-up', area: 'Follow-up & duplicates', severity: 'varies', what: 'Same patient, same doctor/specialty, ≤ 14 days.', source: 'NPHIES CV-1-9' },
-  { id: 'FUP-002', name: 'Duplicate service on the same invoice', area: 'Follow-up & duplicates', severity: 'high', what: 'Same code twice.', source: 'NPHIES AD-2-4' },
-  { id: 'FUP-003', name: 'Refill too soon', area: 'Follow-up & duplicates', severity: 'medium', what: 'Same drug within 20 days.', source: 'PBM edit' },
+  { id: 'FUP-001', name: 'Consultation within 14-day free follow-up', area: 'Technical & administrative', severity: 'varies', what: 'Same patient, same doctor/specialty, ≤ 14 days.', source: 'NPHIES CV-1-9' },
+  { id: 'FUP-002', name: 'Duplicate service on the same invoice', area: 'Technical & administrative', severity: 'high', what: 'Same code twice.', source: 'NPHIES AD-2-4' },
+  { id: 'FUP-003', name: 'Refill too soon', area: 'Technical & administrative', severity: 'medium', what: 'Same drug within 20 days.', source: 'PBM edit' },
+  { id: 'TEC-PRICE-001', name: 'Service code not in the insurer price list', area: 'Technical & administrative', severity: 'high', what: 'Runs only when that insurer’s price list is uploaded under All files → Reference data; otherwise shown as “Unable to verify”.', source: 'Uploaded insurer price list' },
+  { id: 'TEC-PRICE-002', name: 'Unit price differs from the insurer price list', area: 'Technical & administrative', severity: 'medium', what: 'Billed amount ÷ units compared with the contracted price.', source: 'Uploaded insurer price list' },
+  { id: 'TEC-PA-001', name: 'Insurer approval required but no approval number', area: 'Technical & administrative', severity: 'high', what: 'Runs only with an uploaded approval list for that insurer.', source: 'Uploaded insurer approval list' },
+  { id: 'TEC-FIN-001', name: 'Financial inconsistency on a line', area: 'Technical & administrative', severity: 'high', what: 'Net above billed, or negative net. No assumptions about discount formulas.', source: 'Hospital data-quality rule' },
+  { id: 'TEC-GRP-001', name: 'Encounter grouping needs review', area: 'Technical & administrative', severity: 'medium', what: 'Rows grouped by insurer + MRN + service date + physician + encounter type show different complaints, diagnosis sets or repeated consultations.', source: 'Import grouping rule' },
+  { id: 'HIST-001', name: 'Historical rejection pattern', area: 'Historical rejection pattern', severity: 'medium', what: `Shown when a service (optionally with the same 3-character diagnosis group) had ≥ 2 rejected out of ≥ 5 comparable submitted lines (≥ 20%) for the same insurer. Descriptive statistics only.`, source: 'Imported claims and linked rejections' },
 ];
 
 export const ruleName = (id: string) => RULES.find((r) => r.id === id)?.name ?? id;
