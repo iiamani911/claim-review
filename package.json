@@ -1,0 +1,30 @@
+{
+  "name": "wad-clinic-claim-review",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "WAD Clinic claim review platform: pre-submission medical audit and rejection analytics for Saudi insurance claims (CHI / NPHIES).",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "formulary": "python3 scripts/build_formulary.py"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "^1.63.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}

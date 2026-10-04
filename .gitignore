@@ -1,0 +1,9 @@
+node_modules
+dist
+# Never commit patient data (PHI): claim exports and payer statements stay local.
+samples/
+*.xls
+*.xlsx
+!public/**/*.xlsx
+.DS_Store
+*.tsbuildinfo
