@@ -33,8 +33,12 @@ export function readTables(name: string, buf: ArrayBuffer): Table[] {
   const bytes = new Uint8Array(buf);
   if (!isBinary(bytes)) {
     // Many HIS systems export "xls" files that are really tab-separated text with a preamble line.
-    let text = new TextDecoder('utf-8').decode(bytes);
-    if (text.includes('�')) text = new TextDecoder('windows-1252').decode(bytes);
+    let text: string;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      text = new TextDecoder('windows-1252').decode(bytes); // legacy Windows exports
+    }
     const lines = text.split(/\r?\n/).filter((l) => l.length > 0);
     const delim = lines.slice(0, 5).some((l) => l.includes('\t')) ? '\t' : ',';
     const rows = lines.map((l) => (delim === '\t' ? l.split('\t') : splitCsv(l)).map(cellText));
