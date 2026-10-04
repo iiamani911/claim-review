@@ -464,7 +464,17 @@ function mentionPositiveAny(text: string, re: RegExp): boolean {
 }
 
 export function auditAll(claims: Claim[], formulary: Formulary | null): ClaimAudit[] {
-  return claims.map((c) => auditClaim(c, formulary, claims));
+  // Follow-up and refill checks only look at the same patient: index by MRN so large files stay fast.
+  const byMrn = new Map<string, Claim[]>();
+  for (const c of claims) if (c.mrn) byMrn.set(c.mrn, [...(byMrn.get(c.mrn) ?? []), c]);
+  return claims.map((c) => {
+    try {
+      return auditClaim(c, formulary, c.mrn ? byMrn.get(c.mrn)! : []);
+    } catch (e) {
+      // One malformed row must never blank the whole audit.
+      return finalize(c, [{ id: `${c.id}-err`, ruleId: 'SYS-001', area: 'ICD coding quality', severity: 'low', title: 'Encounter could not be fully audited', detail: String(e), fix: 'Check this encounter’s rows in the source file.', amountAtRisk: 0, refs: [] }]);
+    }
+  });
 }
 
 export const AREAS: AuditArea[] = ['Diagnosis ↔ Service', 'Drug ↔ Diagnosis', 'Drug safety & interactions', 'Vital signs ↔ History', 'Missing medical data', 'Severity / Justification', 'ICD coding quality', 'Follow-up & duplicates'];

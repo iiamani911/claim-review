@@ -32,9 +32,14 @@ function tag(claims: Claim[], section: Section, id: string): Claim[] {
 
 export async function ingestFile(file: File, section: Section): Promise<LoadedFile[]> {
   const buf = await file.arrayBuffer();
-  const tables = detect(readTables(file.name, buf));
+  const raw = readTables(file.name, buf);
+  const tables = detect(raw);
   const stamp = new Date().toISOString();
-  if (!tables.length) return [{ id: `${file.name}-${stamp}`, name: file.name, kind: 'unknown', section, sheet: '', rows: 0, header: [], records: [], claims: [], rejections: [], addedAt: stamp }];
+  if (!tables.length) {
+    // Keep the most header-like row so the upload report can say which columns were found.
+    const header = raw.flatMap((t) => t.rows.slice(0, 20)).sort((a, b) => b.filter(Boolean).length - a.filter(Boolean).length)[0] ?? [];
+    return [{ id: `${file.name}-${stamp}`, name: file.name, kind: 'unknown', section, sheet: '', rows: 0, header: header.filter(Boolean).slice(0, 40), records: [], claims: [], rejections: [], addedAt: stamp }];
+  }
   return tables.map((t, i) => {
     const id = `${file.name}-${t.sheet}-${stamp}-${i}`;
     const isStatement = t.kind.startsWith('rejections');

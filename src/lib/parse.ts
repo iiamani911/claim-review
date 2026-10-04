@@ -69,11 +69,23 @@ function splitCsv(line: string): string[] {
   return out;
 }
 
+/** Column aliases (normalised) accepted for the HIS claim export, so other HIS layouts are recognised too. */
+export const CLAIM_ALIASES = {
+  claim: ['claimno', 'claimnumber', 'claimid', 'claim', 'visitno', 'visitnumber', 'visitid', 'encounterno', 'encounterid', 'episodeno', 'invoice', 'invoiceno', 'invoicenumber'],
+  service: ['servicedescription', 'servicedesc', 'servicename', 'service', 'itemdescription', 'itemname', 'description', 'procedurename', 'servicecode', 'itemcode'],
+  icd: ['icd1', 'icd', 'icdcode', 'icd10', 'icd10code', 'diagnosiscode', 'diagnosis', 'diagcode', 'principaldiagnosis', 'primarydiagnosis', 'maindiagnosis', 'diag1', 'diagnosis1'],
+  patient: ['mrn', 'fileno', 'patientfileno', 'patientno', 'patientid', 'medicalrecordno', 'name', 'patientname'],
+};
+
 const SIGNATURES: { kind: FileKind; all: string[] }[] = [
-  { kind: 'claims', all: ['claimno', 'servicedescription', 'icd1'] },
   { kind: 'rejections-waseel', all: ['claimno', 'rejectedamount', 'reason'] },
   { kind: 'rejections-bupa', all: ['rejdesc', 'servcode', 'rejectamount'] },
 ];
+
+const hasAny = (header: string[], aliases: string[]) => aliases.some((a) => header.includes(a));
+/** A claim export needs a claim/visit id, a service and either a diagnosis or a patient column. */
+export const looksLikeClaims = (header: string[]) =>
+  hasAny(header, CLAIM_ALIASES.claim) && hasAny(header, CLAIM_ALIASES.service) && (hasAny(header, CLAIM_ALIASES.icd) || hasAny(header, CLAIM_ALIASES.patient));
 
 export function detect(tables: Table[]): DetectedTable[] {
   const found: DetectedTable[] = [];
@@ -82,6 +94,7 @@ export function detect(tables: Table[]): DetectedTable[] {
       const header = t.rows[h].map(norm);
       let kind: FileKind | null = null;
       for (const sig of SIGNATURES) if (sig.all.every((k) => header.includes(k))) { kind = sig.kind; break; }
+      if (!kind && looksLikeClaims(header)) kind = 'claims';
       if (!kind && header.some((x) => x.includes('reject')) && header.some((x) => x.includes('amount')) && header.some((x) => x.includes('serv'))) {
         kind = 'rejections-generic';
       }
@@ -166,8 +179,8 @@ function cleanIcd(c: string): string {
 /** Encounter identity of an export row: claim no + MRN + service date + physician. */
 export function encounterKey(r: Record<string, string>): string {
   return [
-    pick(r, 'ClaimNo', 'Claim No', 'Claim Number', 'Visit No'),
-    pick(r, 'MRN', 'File No', 'Patient File No'),
+    pick(r, ...CLAIM_ALIASES.claim),
+    pick(r, 'MRN', 'File No', 'Patient File No', 'Patient No', 'Patient ID', 'Medical Record No'),
     parseDate(pick(r, 'Service date', 'Date of admission')),
     pick(r, 'Physician Id', 'Doctor Code', 'Physician name'),
   ].join('|');
@@ -177,19 +190,25 @@ export function encounterKey(r: Record<string, string>): string {
 export function buildClaims(records: Record<string, string>[], sourceFile: string): Claim[] {
   const byClaim = new Map<string, Claim>();
   records.forEach((r, i) => {
-    const claimNo = pick(r, 'ClaimNo', 'Claim No', 'Claim Number', 'Visit No');
+    const claimNo = pick(r, ...CLAIM_ALIASES.claim);
     if (!claimNo) return;
-    const mrn = pick(r, 'MRN', 'File No', 'Patient File No');
+    const mrn = pick(r, 'MRN', 'File No', 'Patient File No', 'Patient No', 'Patient ID', 'Medical Record No');
     const date = parseDate(pick(r, 'Service date', 'Date of admission'));
     const key = encounterKey(r);
     const pairs: [string, string][] = [
-      ['ICD1', 'diag desc'], ['initial diag', 'initial diag descr'], ['diag 2', 'diag 2 desc'],
+      ['ICD1', 'diag desc'], ['ICD', 'ICD Description'], ['ICD Code', 'ICD Description'], ['Diagnosis Code', 'Diagnosis Description'],
+      ['Principal Diagnosis', 'Principal Diagnosis Description'], ['Primary Diagnosis', 'Primary Diagnosis Description'], ['Diagnosis', 'Diagnosis Description'],
+      ['ICD2', 'ICD2 Description'], ['ICD3', 'ICD3 Description'], ['Secondary Diagnosis', 'Secondary Diagnosis Description'],
+      ['initial diag', 'initial diag descr'], ['diag 2', 'diag 2 desc'],
       ['diag 3 code', 'diag 3 desc'], ['diag 3', 'diag 3 desc'], ['diag 4', 'diag 4 desc'], ['diag 5', 'diag 5 desc'],
     ];
     const rowDx: Diagnosis[] = [];
     for (const [code, desc] of pairs) {
-      const v = cleanIcd(pick(r, code));
-      if (v && !rowDx.some((d) => d.code === v)) rowDx.push({ code: v, desc: pick(r, desc) });
+      // A cell may hold several codes ("J02.9, R50.9"); keep only things shaped like ICD-10 codes.
+      for (const raw of pick(r, code).split(/[,;/|]+/)) {
+        const v = cleanIcd(raw);
+        if (/^[A-Z]\d{2}(\.?[0-9A-Z]{1,4})?$/.test(v) && !rowDx.some((d) => d.code === v)) rowDx.push({ code: v, desc: pick(r, desc) });
+      }
     }
     let c = byClaim.get(key);
     if (c) {
@@ -248,8 +267,8 @@ export function buildClaims(records: Record<string, string>[], sourceFile: strin
       id: '',
       invoice: pick(r, 'INVOICE', 'Invoice No', 'Invoice Number'),
       category: pick(r, 'ServiceCategory', 'Service Type', 'Category') || 'Other',
-      code: pick(r, 'service code', 'Service Code'),
-      desc: pick(r, 'ServiceDescription', 'Service Description', 'Service'),
+      code: pick(r, 'service code', 'Service Code', 'Item Code', 'Code'),
+      desc: pick(r, 'ServiceDescription', 'Service Description', 'Service Name', 'Service', 'Item Description', 'Item Name', 'Description', 'Procedure Name'),
       units: num(pick(r, 'ServiceUnits', 'Qty', 'Quantity')) ?? 1,
       billed: money(pick(r, 'BilledAmount', 'Gross')),
       net: money(pick(r, 'Net amount', 'Net')),

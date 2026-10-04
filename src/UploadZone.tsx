@@ -11,8 +11,11 @@ const HELP: Record<Section, string> = {
 };
 
 /** Upload area bound to one section: files dropped here are treated according to that section. */
+interface Report { name: string; ok: boolean; text: string }
+
 export default function UploadZone({ section, compact }: { section: Section; compact?: boolean }) {
-  const { files, addFiles, removeFile, isDemo } = useData();
+  const { files, addFiles, removeFile, isDemo, go } = useData();
+  const [report, setReport] = useState<Report[]>([]);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -24,18 +27,34 @@ export default function UploadZone({ section, compact }: { section: Section; com
     setBusy(true);
     setMsg('');
     try {
-      const loaded = (await Promise.all([...list].map((f) => ingestFile(f, section)))).flat();
-      const bad = loaded.filter((f) => f.kind === 'unknown');
-      const good = loaded.filter((f) => f.kind !== 'unknown');
-      addFiles(good);
-      const moved = good.filter((f) => f.note).map((f) => `${f.name}: ${f.note}`);
-      const enc = good.reduce((s, f) => s + f.claims.length, 0);
-      const rej = good.reduce((s, f) => s + f.rejections.length, 0);
-      setMsg([
-        good.length ? `Added ${good.length} file(s) to ${SECTION_LABEL[section]}: ${int(enc)} encounters, ${int(rej)} rejected lines.` : '',
-        ...moved,
-        bad.length ? `Not recognised: ${bad.map((b) => b.name).join(', ')}. Expected an HIS claim export (ClaimNo, ServiceDescription, ICD1…) or a payer rejection statement.` : '',
-      ].filter(Boolean).join(' '));
+      const loaded = (await Promise.all([...list].map((f) => ingestFile(f, section).catch((e) => [{ kind: 'error', name: f.name, error: String(e) } as never])))).flat();
+      const rep: Report[] = [];
+      const good: typeof loaded = [];
+      for (const f of loaded as (typeof loaded[number] & { error?: string })[]) {
+        if (f.error) { rep.push({ name: f.name, ok: false, text: `Could not read the file (${f.error}). Save it as .xlsx or .csv and try again.` }); continue; }
+        if (f.kind === 'unknown') {
+          rep.push({ name: f.name, ok: false, text: `File type not recognised. Columns found: ${f.header.join(', ') || 'none'}. A claim export needs a claim/visit number, a service and a diagnosis (ICD) or patient column; a statement needs service, reason and rejected amount.` });
+          continue;
+        }
+        if (f.kind === 'claims' && !f.claims.length) {
+          rep.push({ name: f.name, ok: false, text: `Recognised as a claim export (${int(f.rows)} rows) but no encounters could be built: the claim/visit number column is empty. Columns: ${f.header.filter(Boolean).slice(0, 25).join(', ')}.` });
+          continue;
+        }
+        good.push(f);
+        const months = [...new Set([...f.claims.map((c) => c.serviceDate.slice(0, 7)), ...f.rejections.map((r) => r.serviceDate.slice(0, 7))].filter(Boolean))].sort();
+        const flagged = f.claims.length;
+        rep.push({
+          name: f.name, ok: true,
+          text: f.kind === 'claims'
+            ? `${int(f.rows)} rows → ${int(flagged)} encounters${months.length ? ` (${months.join(', ')})` : ''} added to ${SECTION_LABEL[f.section]}.${f.claims.every((c) => !c.diagnoses.length) ? ' Warning: no ICD codes were found in this file.' : ''}`
+            : `${int(f.rejections.length)} rejected lines added to Rejection analysis.${f.note ? ' ' + f.note : ''}`,
+        });
+      }
+      if (good.length) addFiles(good);
+      setReport(rep);
+      setMsg('');
+      const firstClaims = good.find((f) => f.kind === 'claims' && f.section === section);
+      if (firstClaims) go(section === 'medical' ? 'audit' : section === 'technical' ? 'technical' : 'rejections', { fileId: firstClaims.id });
     } catch (e) {
       setMsg(`Import failed: ${String(e)}`);
     } finally {
@@ -62,6 +81,11 @@ export default function UploadZone({ section, compact }: { section: Section; com
         <input ref={input} id={`file-input-${section}`} type="file" multiple accept=".xls,.xlsx,.csv,.txt" hidden onChange={(e) => handle(e.target.files)} />
       </div>
       {msg && <div className="banner" role="status">{msg}</div>}
+      {report.length > 0 && (
+        <div className="report" role="status">
+          {report.map((r) => <div key={r.name} className={r.ok ? 'ok' : 'bad'}><b>{r.ok ? '✓' : '✗'} {r.name}</b> – {r.text}</div>)}
+        </div>
+      )}
       {mine.length > 0 && (
         <div className="file-chips">
           {mine.map((f) => (

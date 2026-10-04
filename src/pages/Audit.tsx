@@ -31,7 +31,9 @@ export default function AuditPage() {
 }
 
 export function AuditWorkspace({ audits, view, exportName, emptyText }: { audits: ClaimAudit[]; view: AuditView; exportName: string; emptyText?: string }) {
-  const { focus, review } = useData();
+  const { focus, review, files } = useData();
+  const [fileId, setFileId] = useState(focus.fileId ?? '');
+  const srcFiles = useMemo(() => files.filter((f) => audits.some((a) => a.claim.sourceFileId === f.id)), [files, audits]);
   const [q, setQ] = useState('');
   const [sevs, setSevs] = useState<Set<SevFilter>>(new Set(['critical', 'high']));
   const [area, setArea] = useState<AuditArea | ''>('');
@@ -41,6 +43,8 @@ export function AuditWorkspace({ audits, view, exportName, emptyText }: { audits
   const [sel, setSel] = useState<string | null>(focus.claimId ?? null);
 
   useEffect(() => { if (focus.claimId) { setSel(focus.claimId); setSevs(new Set()); } }, [focus.claimId]);
+  // A fresh upload jumps straight to that file's results, all severities shown.
+  useEffect(() => { if (focus.fileId) { setFileId(focus.fileId); setSevs(new Set()); setSel(null); } }, [focus.fileId]);
 
   const doctors = useMemo(() => [...new Set(audits.map((a) => a.claim.physician))].sort(), [audits]);
   const months = useMemo(() => [...new Set(audits.map((a) => a.claim.serviceDate.slice(0, 7)).filter(Boolean))].sort(), [audits]);
@@ -49,20 +53,21 @@ export function AuditWorkspace({ audits, view, exportName, emptyText }: { audits
     const t = q.trim().toLowerCase();
     return audits
       .filter((a) => !sevs.size || sevs.has(a.worst ?? 'clean') || (sevs.has('clean') && !a.findings.some((f) => f.severity === 'critical' || f.severity === 'high')))
+      .filter((a) => !fileId || a.claim.sourceFileId === fileId)
       .filter((a) => !area || a.findings.some((f) => f.area === area))
       .filter((a) => !doctor || a.claim.physician === doctor)
       .filter((a) => !month || a.claim.serviceDate.startsWith(month))
       .filter((a) => !t || [a.claim.claimNo, a.claim.mrn, a.claim.patientName, a.claim.physician, ...a.claim.diagnoses.map((d) => d.code), ...a.claim.lines.map((l) => l.desc)].join(' ').toLowerCase().includes(t))
       .sort((a, b) => (sort === 'score' ? rank(a) - rank(b) || b.score - a.score || b.amountAtRisk - a.amountAtRisk : sort === 'amount' ? b.amountAtRisk - a.amountAtRisk : b.claim.serviceDate.localeCompare(a.claim.serviceDate)));
-  }, [audits, q, sevs, area, doctor, month, sort]);
+  }, [audits, q, sevs, area, doctor, month, sort, fileId]);
 
   const selected = audits.find((a) => a.claim.id === sel) ?? null;
   const toggle = (s: SevFilter) => setSevs((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
   const counts = useMemo(() => {
     const c: Record<SevFilter, number> = { critical: 0, high: 0, medium: 0, low: 0, clean: 0 };
-    for (const a of audits) c[a.worst ?? 'clean']++;
+    for (const a of audits) if (!fileId || a.claim.sourceFileId === fileId) c[a.worst ?? 'clean']++;
     return c;
-  }, [audits]);
+  }, [audits, fileId]);
 
   if (!audits.length) return <div className="card"><Empty title="No encounters in this section yet">{emptyText ?? 'Upload an HIS claim export above.'}</Empty></div>;
   const marked = audits.filter(needsReview).length;
@@ -83,6 +88,12 @@ export function AuditWorkspace({ audits, view, exportName, emptyText }: { audits
             </button>
           ))}
         </div>
+        {srcFiles.length > 1 && (
+          <select id="audit-file" className="select" value={fileId} onChange={(e) => setFileId(e.target.value)} aria-label="File">
+            <option value="">All files ({srcFiles.length})</option>
+            {srcFiles.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+        )}
         <select id="audit-area" className="select" value={area} onChange={(e) => setArea(e.target.value as AuditArea | '')}>
           <option value="">All audit areas</option>
           {AREAS.map((a) => <option key={a}>{a}</option>)}

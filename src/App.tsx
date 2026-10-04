@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { Component, createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ClaimAudit, Rejection, Claim, Section } from './lib/types';
 import { Formulary, type FormularyData } from './lib/formulary';
 import { auditAll, viewAudit } from './lib/engine';
@@ -31,8 +31,8 @@ interface DataCtx {
   review: ReviewMap;
   setReview: (ids: string[], s: ReviewStatus) => void;
   clearAll: () => void;
-  go: (p: PageId, opts?: { claimId?: string; doctor?: string }) => void;
-  focus: { claimId?: string; doctor?: string };
+  go: (p: PageId, opts?: { claimId?: string; doctor?: string; fileId?: string }) => void;
+  focus: { claimId?: string; doctor?: string; fileId?: string };
 }
 
 const Ctx = createContext<DataCtx | null>(null);
@@ -91,7 +91,8 @@ export default function App() {
   };
   const ctx: DataCtx = {
     files, claims, audits, rejections, formulary, isDemo, focus,
-    addFiles: (f) => persist([...files.filter((x) => !x.demo), ...f]),
+    // Uploading the same file again into the same section replaces it instead of doubling every encounter.
+    addFiles: (f) => persist([...files.filter((x) => !x.demo && !f.some((n) => n.name === x.name && n.section === x.section && n.sheet === x.sheet)), ...f]),
     removeFile: (id) => {
       const next = files.filter((x) => x.id !== id);
       persist(next.length ? next : demoFiles());
@@ -153,7 +154,7 @@ export default function App() {
             </div>
           )}
           {fError && <div className="banner">Drug formulary could not be loaded ({fError}). Drug ↔ diagnosis checks are paused; other checks still run.</div>}
-          {!ready ? <p className="muted">Loading…</p> : <Page id={page} />}
+          {!ready ? <p className="muted">Loading…</p> : <ErrorBoundary key={page}><Page id={page} /></ErrorBoundary>}
         </main>
       </div>
     </Ctx.Provider>
@@ -172,5 +173,24 @@ function Page({ id }: { id: PageId }) {
     case 'technical': return <TechnicalPage />;
     case 'review': return <ReviewPage />;
     case 'compare': return <ComparePage />;
+  }
+}
+
+/** Shows what went wrong instead of a blank page when a file has data the screens did not expect. */
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: string }> {
+  state = { error: '' };
+  static getDerivedStateFromError(e: unknown) {
+    return { error: String(e instanceof Error ? e.message : e) };
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="card" role="alert">
+        <h2>This page could not be shown</h2>
+        <p className="muted" style={{ marginTop: 6 }}>Something in the uploaded data broke this screen: <span className="mono">{this.state.error}</span></p>
+        <p className="muted" style={{ marginTop: 6 }}>Your files are still loaded. Try another page, or remove the last file from All files and send it to the insurance office developer.</p>
+        <button className="btn" style={{ marginTop: 10 }} onClick={() => this.setState({ error: '' })}>Try again</button>
+      </div>
+    );
   }
 }

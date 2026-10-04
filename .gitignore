@@ -7,3 +7,4 @@ samples/
 !public/**/*.xlsx
 .DS_Store
 *.tsbuildinfo
+fixtures-local/
