@@ -1,5 +1,7 @@
 import * as XLSX from 'xlsx';
-import type { ClaimAudit, Rejection } from './types';
+import type { ClaimAudit, Rejection, Severity } from './types';
+
+const LEVEL = (s: Severity | null | undefined) => (!s ? '' : s === 'critical' || s === 'high' ? 'MUST FIX' : s === 'medium' ? 'REVIEW' : 'INFO');
 
 /** Findings workbook: one sheet for all findings + one sheet per doctor (ready to send for correction). */
 export function exportFindings(audits: ClaimAudit[], file = 'WAD_medical_audit.xlsx') {
@@ -13,7 +15,7 @@ export function exportFindings(audits: ClaimAudit[], file = 'WAD_medical_audit.x
       Doctor: a.claim.physician,
       Specialty: a.claim.specialty,
       ICD: a.claim.diagnoses.map((d) => d.code).join(', '),
-      Severity: f.severity.toUpperCase(),
+      Level: LEVEL(f.severity),
       Area: f.area,
       Rule: f.ruleId,
       Finding: f.title,
@@ -87,14 +89,14 @@ export function exportMarked(sources: MarkedSource[], audits: Map<string, ClaimA
         seen.add(id);
         list.push({
           Status: flag, Section: s.section, 'File No': a.claim.mrn, Patient: a.claim.patientName, 'Claim No': a.claim.claimNo, Date: a.claim.serviceDate,
-          Doctor: a.claim.physician, Severity: (a.worst ?? '').toUpperCase(), 'SAR at risk': a.amountAtRisk, Reasons: serious.map((f) => f.title).join(' | '), 'Source file': s.name,
+          Doctor: a.claim.physician, Level: LEVEL(a.worst), 'SAR at risk': a.amountAtRisk, Reasons: serious.map((f) => f.title).join(' | '), 'Source file': s.name,
         });
       }
       const out: Record<string, unknown> = {
         REVIEW: flag,
         'File No': a?.claim.mrn ?? '',
         'Patient name': a?.claim.patientName ?? '',
-        Severity: serious.length ? (a?.worst ?? '').toUpperCase() : '',
+        Level: serious.length ? LEVEL(a?.worst) : '',
         'Review reasons': serious.map((f) => f.title).join(' | '),
       };
       for (const h of s.header) if (h) out[h] = r[h.toLowerCase().replace(/[^a-z0-9]/g, '')] ?? '';

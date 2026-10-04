@@ -14,7 +14,7 @@ export default function Rulebook() {
         <div>
           <span className="eyebrow">Transparency</span>
           <h1>Rulebook & sources</h1>
-          <p>Every check the audit runs, the evidence behind it and the severity it carries. Severity means: <b>critical</b> – near-certain automated rejection; <b>high</b> – likely rejection or audit failure; <b>medium</b> – weak point a reviewer may reject; <b>low</b> – coding hygiene.</p>
+          <p>Every check the audit runs, the evidence behind it and the severity it carries. Levels: <b>Must fix</b> – likely or near-certain rejection, change before submission; <b>Review</b> – weak point a reviewer may reject; <b>Info</b> – coding hygiene. Items in the always-rejected list are always Must fix.</p>
         </div>
         <div className="seg" role="group" aria-label="Section">
           {([['rules', `Audit rules (${RULES.length})`], ['services', `Service criteria (${SERVICE_RULES.length})`], ['ddi', `Interactions (${INTERACTIONS.length})`], ['causes', 'Rejection causes'], ['sources', 'Sources']] as const).map(([k, l]) => (

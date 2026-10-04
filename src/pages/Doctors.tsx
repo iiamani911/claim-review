@@ -24,7 +24,7 @@ export default function DoctorsPage() {
       <div className="split">
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Doctor</th><th className="r">Enc.</th><th className="r">Clean</th><th className="r">Critical</th><th className="r">At risk</th><th className="r">Rejected</th></tr></thead>
+            <thead><tr><th>Doctor</th><th className="r">Enc.</th><th className="r">Clean</th><th className="r">Must fix</th><th className="r">At risk</th><th className="r">Rejected</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.doctor} className="clickable" aria-selected={r.doctor === d?.doctor} onClick={() => setSel(r.doctor)}>

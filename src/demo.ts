@@ -36,7 +36,7 @@ const VISITS: Visit[] = [
     lines: [SPEC, ['Medicine', '2511211365', 'OTRIVIN NASAL SPRAY 0.1%/1Applicator', 14], ['Medicine', '2610200242', 'LORINASE-D 120 mg tablet, 20 TABLET/BOX', 22], ['Medicine', '1111246173', 'AZIMAC Film coated tablet 500MG/1Tablet, 3Tablet/Box', 28]] },
   { claim: 'D-1004', mrn: 'DM-04', name: 'Demo Patient D', gender: 'Male', age: '38Y', date: '2026-07-09', doc: [...DOCS.ortho], icd: [['S93.4', 'Sprain of ankle']], vit: ['126/80', '36.5', '76', '16', '178', '85'],
     hx: 'Right ankle pain and swelling after twisting injury.',
-    lines: [SPEC, ['Radiology', 'XY0057', 'X-RAY ANKLE JOINT AP & LAT VIEWS', 84], ['Procedures', 'PR0090', 'Crepe Bandage (Small)', 12], ['Medicine', '0902221709', 'DIVIDO Capsule 75MG/1Capsule, 20Capsule/Box', 24.5], ['Medicine', '1308258025', 'BRUFEN Tablet 600MG/1Tablet, 30Tablet/Box', 12]] },
+    lines: [SPEC, ['Radiology', 'XY0057', 'X-RAY ANKLE JOINT AP & LAT VIEWS', 84], ['Procedures', 'PR0090', 'Crepe Bandage (Small)', 12], ['Medicine', '0902221709', 'DIVIDO Capsule 75MG/1Capsule, 20Capsule/Box', 24.5], ['Medicine', '1308258025', 'BRUFEN Tablet 600MG/1Tablet, 30Tablet/Box', 12], ['Medicine', '0812258752', 'Solpadeine tablet Capsule, 20 Tablet/Box', 18]] },
   { claim: 'D-1005', mrn: 'DM-05', name: 'Demo Patient E', gender: 'Male', age: '42Y', date: '2026-07-10', doc: [...DOCS.er2], icd: [['S61.4', 'Open wound of hand']], vit: ['130/84', '36.6', '90', '18', '170', '80'],
     hx: 'Laceration of left hand by machine blade at work 2 hours ago. O/E 3 cm clean wound, no tendon injury. Plan: suturing and dressing.',
     lines: [CONS, ['Procedures', 'PR0110', 'DRESSING FOR MEDIUM WOUND', 40], ['Procedures', 'PR0111', 'Suturing of wound, small', 120]] },

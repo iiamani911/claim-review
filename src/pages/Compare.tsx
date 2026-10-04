@@ -94,7 +94,7 @@ export default function ComparePage() {
     { label: 'Clean-claim rate', get: (m) => (m.enc ? m.clean / m.enc : 0), fmt: pct, goodWhenUp: true },
     { label: 'Marked for review', get: (m) => m.enc - m.clean, fmt: int, goodWhenUp: false },
     { label: 'Findings per encounter', get: (m) => (m.enc ? m.findings / m.enc : 0), fmt: (n) => n.toFixed(1), goodWhenUp: false },
-    { label: 'Critical findings', get: (m) => m.critical, fmt: int, goodWhenUp: false },
+    { label: 'Must-fix findings', get: (m) => m.critical, fmt: int, goodWhenUp: false },
     { label: 'SAR at risk', get: (m) => m.atRisk, fmt: (n) => sar(n), goodWhenUp: false },
     { label: 'At risk as % of billed', get: (m) => (m.billed ? m.atRisk / m.billed : 0), fmt: pct, goodWhenUp: false },
     { label: 'Rejected SAR (statements)', get: (m) => m.rejSar, fmt: (n) => sar(n), goodWhenUp: false },

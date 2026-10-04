@@ -27,9 +27,9 @@ export default function Overview() {
 
       <section className="kpis" aria-label="Key figures">
         <Kpi label="Encounters audited" value={int(s.encounters)} sub={`${sar(s.billed)} billed (net)`} tone="accent" />
-        <Kpi label="Clean-claim rate" value={pct(s.cleanRate)} sub={`${int(s.clean)} with no critical/high finding`} tone="good" />
-        <Kpi label="Amount at risk" value={sar(s.amountAtRisk)} sub="lines with critical/high findings" tone="crit" />
-        <Kpi label="Files marked for review" value={<button className="btn ghost" style={{ padding: 0, font: 'inherit' }} onClick={() => go('review')}>{int(s.encounters - s.clean)} ⚑</button>} sub={`${int(s.bySeverity.critical)} critical · ${int(s.bySeverity.high)} high findings`} tone="high" />
+        <Kpi label="Clean-claim rate" value={pct(s.cleanRate)} sub={`${int(s.clean)} with nothing to fix`} tone="good" />
+        <Kpi label="Amount at risk" value={sar(s.amountAtRisk)} sub="lines with must-fix findings" tone="crit" />
+        <Kpi label="Files marked for review" value={<button className="btn ghost" style={{ padding: 0, font: 'inherit' }} onClick={() => go('review')}>{int(s.encounters - s.clean)} ⚑</button>} sub={`${int(s.bySeverity.critical + s.bySeverity.high)} must-fix findings`} tone="high" />
         <Kpi label="Already rejected" value={sar(r.amount)} sub={`${int(r.lines)} lines · ${pct(r.amount ? r.medical / r.amount : 0)} medical`} />
       </section>
 
@@ -40,14 +40,13 @@ export default function Overview() {
             rows={s.byArea.filter((a) => a.count).sort((a, b) => b.critical * 100 + b.high - (a.critical * 100 + a.high)).map((a) => ({
               key: a.area, label: a.area, display: `${int(a.count)} · ${int(a.encounters)} enc.`,
               segs: [
-                { name: 'Critical', value: a.critical, color: sevColor('critical') },
-                { name: 'High', value: a.high, color: sevColor('high') },
-                { name: 'Medium/low', value: a.count - a.critical - a.high, color: 'var(--line)' },
+                { name: 'Must fix', value: a.critical + a.high, color: sevColor('critical') },
+                { name: 'Review / info', value: a.count - a.critical - a.high, color: 'var(--line)' },
               ],
             }))}
             onPick={() => go('audit')}
           />
-          <div style={{ marginTop: 12 }}><Legend items={[{ name: 'Critical', color: sevColor('critical') }, { name: 'High', color: sevColor('high') }, { name: 'Medium / low', color: 'var(--line)' }]} /></div>
+          <div style={{ marginTop: 12 }}><Legend items={[{ name: 'Must fix', color: sevColor('critical') }, { name: 'Review / info', color: 'var(--line)' }]} /></div>
         </div>
         <div className="card">
           <div className="card-head"><h2>Rejections by cause</h2><p>SAR rejected</p></div>

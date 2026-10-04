@@ -154,7 +154,7 @@ export const SERVICE_RULES: ServiceRule[] = [
     refs: ['BSG iron deficiency guideline 2021'],
   },
   {
-    id: 'LAB-RENAL', label: 'Renal function (creatinine / urea / electrolytes)', match: /creatinin|\burea\b|\bbun\b|renal function|kidney function|\brft\b|\bkft\b|electrolyt|sodium|potassium|\bu&e\b/i,
+    id: 'LAB-RENAL', label: 'Renal function (creatinine / urea / electrolytes)', match: /creatinin|\burea\b(?!\s*breath)|\bbun\b|renal function|kidney function|\brft\b|\bkft\b|electrolyt|sodium|potassium|\bu&e\b/i,
     icd: ['N0', 'N1', 'N2', 'I10', 'I11', 'I12', 'I13', 'I15', 'I50', 'E10', 'E11', 'E13', 'E14', 'E86', 'E87', 'A0', 'R34', 'R60', 'R11', 'O14', 'O21', 'M10', 'Z79', 'Z01.81', 'E27', 'E24', 'T50', 'D59', 'M32', 'G93'],
     conditional: [{ icd: ['R10', 'K29', 'K30', 'R42', 'R53', 'J06', 'R50'], needs: DEHYDRATION, needsLabel: 'dehydration signs, persistent vomiting/diarrhoea or nephrotoxic drug use' }],
     suggest: 'Code E86.0 dehydration, N23 renal colic, I10 hypertension or Z79.1 long-term NSAID use, with the clinical sign.',

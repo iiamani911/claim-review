@@ -41,13 +41,14 @@ export function Kpi({ label, value, sub, tone }: { label: string; value: ReactNo
   );
 }
 
-const SEV_LABEL: Record<Severity, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+/** Critical and high are one reviewer level: “Must fix”. */
+const SEV_LABEL: Record<Severity, string> = { critical: 'Must fix', high: 'Must fix', medium: 'Review', low: 'Info' };
 export function Sev({ s }: { s: Severity | null }) {
-  if (!s) return <span className="sev sev-clean">Clean</span>;
-  return <span className={`sev sev-${s}`}>{SEV_LABEL[s]}</span>;
+  if (!s) return <span className="sev sev-clean">OK</span>;
+  return <span className={`sev sev-${s === 'high' ? 'critical' : s}`}>{SEV_LABEL[s]}</span>;
 }
 
-export const sevColor = (s: Severity) => `var(--${s === 'critical' ? 'crit' : s === 'high' ? 'high' : s === 'medium' ? 'med' : 'low'})`;
+export const sevColor = (s: Severity) => `var(--${s === 'critical' || s === 'high' ? 'crit' : s === 'medium' ? 'med' : 'low'})`;
 
 export function Codes({ codes }: { codes: string[] }) {
   return <span className="codes">{codes.map((c) => <span key={c} className="code">{c}</span>)}</span>;

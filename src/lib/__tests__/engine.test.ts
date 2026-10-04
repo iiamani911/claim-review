@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Formulary, icdMatches } from '../formulary';
-import { auditAll } from '../engine';
+import { auditAll, auditClaim } from '../engine';
+import { HOSPITAL_WATCHLIST, matchWatch } from '../kb/watchlist';
 import { buildClaims, parseAge, parseDate, detect, readTables } from '../parse';
 import { mention } from '../text';
 import { classify } from '../kb/rejectionCodes';
@@ -117,5 +118,23 @@ describe('rejections', () => {
     const linked = linkRejections(parseRejections(demoRejectionTable(), 'demo'), claims);
     expect(linked.every((r) => r.linkedClaim)).toBe(true);
     expect(linked.find((r) => r.serviceCode === '3103210658')?.icdsNamed).toEqual(['J06.9', 'R50.9']);
+  });
+});
+
+describe('always-rejected watchlist and must-fix level', () => {
+  it('matches normal saline, Solpadeine and IV Parafusive but not sodium chloride', () => {
+    expect(matchWatch(HOSPITAL_WATCHLIST, '0109222573', 'NS NORMAL SALINE 0.9 %/ml 100 ML/Bottle')?.kind).toBe('replace');
+    expect(matchWatch(HOSPITAL_WATCHLIST, '', 'Ns Normal Saline Solution 0.9%/1ml, 500ml/Bottle')).toBeTruthy();
+    expect(matchWatch(HOSPITAL_WATCHLIST, '0812258752', 'Solpadeine tablet Capsule, 20 Tablet/Box')?.kind).toBe('warning');
+    expect(matchWatch(HOSPITAL_WATCHLIST, '69-188-15', 'PARACETAMOL/parafusive/vitopeine Injection')).toBeTruthy();
+    expect(matchWatch(HOSPITAL_WATCHLIST, '', 'SODIUM CHLORIDE 0.9% 100 ml')).toBeUndefined();
+    expect(matchWatch(HOSPITAL_WATCHLIST, '', 'DNS DEXTROSE 5% IN NORMAL SALINE')).toBeUndefined();
+  });
+  it('raises a must-fix replacement finding on the claim line and no "high" level remains', () => {
+    const a = auditClaim(byClaim('D-1001', '2026-07-03').claim, formulary, [], HOSPITAL_WATCHLIST);
+    const w = a.findings.find((f) => f.ruleId === 'WATCH-REPLACE');
+    expect(w?.severity).toBe('critical');
+    expect(w?.fix).toMatch(/Sodium Chloride/);
+    expect(audits.flatMap((x) => x.findings).some((f) => f.severity === 'high')).toBe(false);
   });
 });

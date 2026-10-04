@@ -4,6 +4,7 @@ export type Section = 'medical' | 'rejection' | 'technical';
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 
 export type AuditArea =
+  | 'Always-rejected items'
   | 'Diagnosis ↔ Service'
   | 'Drug ↔ Diagnosis'
   | 'Drug safety & interactions'

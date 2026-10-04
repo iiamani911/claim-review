@@ -50,7 +50,7 @@ export default function ReviewPage() {
         <div>
           <span className="eyebrow">Marked files</span>
           <h1>Files to review</h1>
-          <p>Every encounter with a critical or high finding is marked with its file number and patient name. Work through the list, mark each one reviewed, and download your uploaded files back with a ⚑ REVIEW column on every flagged row.</p>
+          <p>Every encounter with a must-fix finding is marked with its file number and patient name. Work through the list, mark each one reviewed, and download your uploaded files back with a ⚑ REVIEW column on every flagged row.</p>
         </div>
         <button className="btn primary" onClick={download}><Icon name="download" />Download marked files (Excel)</button>
       </div>

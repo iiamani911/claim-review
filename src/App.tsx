@@ -2,6 +2,7 @@ import { Component, createContext, useContext, useEffect, useMemo, useState, typ
 import type { ClaimAudit, Rejection, Claim, Section } from './lib/types';
 import { Formulary, type FormularyData } from './lib/formulary';
 import { auditAll, viewAudit } from './lib/engine';
+import { buildWatchlist, type WatchItem } from './lib/kb/watchlist';
 import { linkRejections } from './lib/rejections';
 import { demoFiles, loadFiles, loadReview, moveFile, saveFiles, saveReview, type LoadedFile, type ReviewMap, type ReviewStatus } from './store';
 import { Icon, int } from './ui';
@@ -24,6 +25,7 @@ interface DataCtx {
   audits: ClaimAudit[];
   rejections: Rejection[];
   formulary: Formulary | null;
+  watch: WatchItem[];
   isDemo: boolean;
   addFiles: (f: LoadedFile[]) => void;
   removeFile: (id: string) => void;
@@ -82,7 +84,8 @@ export default function App() {
 
   const isDemo = files.length > 0 && files.every((f) => f.demo);
   const claims = useMemo(() => files.flatMap((f) => f.claims), [files]);
-  const audits = useMemo(() => (formulary || fError ? auditAll(claims, formulary) : []), [claims, formulary, fError]);
+  const watch = useMemo(() => buildWatchlist(files.flatMap((f) => f.rejections)), [files]);
+  const audits = useMemo(() => (formulary || fError ? auditAll(claims, formulary, watch) : []), [claims, formulary, fError, watch]);
   const rejections = useMemo(() => linkRejections(files.flatMap((f) => f.rejections), claims), [files, claims]);
 
   const persist = (next: LoadedFile[]) => {
@@ -90,7 +93,7 @@ export default function App() {
     saveFiles(next);
   };
   const ctx: DataCtx = {
-    files, claims, audits, rejections, formulary, isDemo, focus,
+    files, claims, audits, rejections, formulary, watch, isDemo, focus,
     // Uploading the same file again into the same section replaces it instead of doubling every encounter.
     addFiles: (f) => persist([...files.filter((x) => !x.demo && !f.some((n) => n.name === x.name && n.section === x.section && n.sheet === x.sheet)), ...f]),
     removeFile: (id) => {

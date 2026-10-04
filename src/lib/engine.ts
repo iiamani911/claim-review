@@ -1,3 +1,4 @@
+import { matchWatch, type WatchItem } from './kb/watchlist';
 import type { AuditArea, Claim, ClaimAudit, Finding, ServiceLine, Severity } from './types';
 import { checkIndication, suggestIndications, type DrugMatch, type Formulary } from './formulary';
 import { SERVICE_RULES, NON_COVERED_ICDS, type ServiceRule } from './kb/services';
@@ -66,16 +67,24 @@ interface Builder {
   add(f: Omit<Finding, 'id' | 'amountAtRisk'> & { amountAtRisk?: number }): void;
 }
 
-export function auditClaim(claim: Claim, formulary: Formulary | null, history: Claim[] = []): ClaimAudit {
+export function auditClaim(claim: Claim, formulary: Formulary | null, history: Claim[] = [], watch: WatchItem[] = []): ClaimAudit {
   const findings: Finding[] = [];
   const lineById = new Map(claim.lines.map((l) => [l.id, l]));
   const b: Builder = {
     add(f) {
+      // Critical and high are one level for reviewers: both must be changed before submission.
+      if (f.severity === 'high') f = { ...f, severity: 'critical' };
       const amt = f.amountAtRisk ?? (f.lineIds ?? []).reduce((s, id) => s + (lineById.get(id) ? lineAmount(lineById.get(id)!) : 0), 0);
       findings.push({ ...f, id: `${claim.id}-${findings.length + 1}`, amountAtRisk: Math.round(amt * 100) / 100 });
     },
   };
   const icds = claim.diagnoses.map((d) => d.code);
+
+  // ─────────────── Always-rejected items (watchlist) ───────────────
+  for (const l of claim.lines) {
+    const w = matchWatch(watch, l.code, l.desc);
+    if (w) b.add({ ruleId: w.kind === 'replace' ? 'WATCH-REPLACE' : 'WATCH-WARN', area: 'Always-rejected items', severity: 'critical', title: w.kind === 'replace' ? `Replace before submission: ${l.desc}` : `Always rejected: ${l.desc}`, detail: `${w.problem}${w.times ? ` Seen ${w.times}× in loaded statements.` : ''}`, fix: w.action, lineIds: [l.id], refs: [w.source] });
+  }
   const text = [claim.history, claim.examination, claim.plan].filter(Boolean).join(' . ');
   const age = claim.ageYears;
   const isFemale = claim.gender === 'F';
@@ -379,7 +388,7 @@ export function auditClaim(claim: Claim, formulary: Formulary | null, history: C
   const examText = claim.examination || text;
   const needsJustification = claim.lines.some((l) => /lab|radio|imag|proced|operat/i.test(l.category)) || injDrugs.length > 0;
   if (!TERMS.exam.test(examText)) {
-    b.add({ ruleId: 'DOC-003', area: 'Missing medical data', severity: needsJustification ? 'high' : 'medium', title: 'Examination findings not documented', detail: claim.examination ? 'Examination field has no clinical findings.' : 'No examination findings found in the record sent with the claim (history only).', fix: 'Document focused examination relevant to the complaint (e.g. throat/tonsils, chest auscultation, abdominal tenderness, ear drum, tooth/percussion).', suggestedNote: 'O/E: general condition __, (system) __; positive findings __; relevant negatives __.', refs: ['CHI clinical documentation', 'NPHIES MN-1-1'] });
+    b.add({ ruleId: 'DOC-003', area: 'Missing medical data', severity: needsJustification && claim.examination ? 'high' : 'medium', title: 'Examination findings not documented', detail: claim.examination ? 'Examination field has no clinical findings.' : 'No examination findings found in the record sent with the claim (history only).', fix: 'Document focused examination relevant to the complaint (e.g. throat/tonsils, chest auscultation, abdominal tenderness, ear drum, tooth/percussion).', suggestedNote: 'O/E: general condition __, (system) __; positive findings __; relevant negatives __.', refs: ['CHI clinical documentation', 'NPHIES MN-1-1'] });
   }
   if (!TERMS.plan.test(claim.plan || text)) {
     b.add({ ruleId: 'DOC-004', area: 'Missing medical data', severity: 'medium', title: 'Management plan not documented', detail: 'No plan (treatment, investigations rationale, advice, follow-up) is recorded.', fix: 'Write the plan: medications with dose/duration, investigations and why, advice, follow-up/red-flag instructions.', suggestedNote: 'Plan: __ (dose/frequency/duration); investigations: __ to rule out __; advice: __; follow-up in __ days or earlier if __.', refs: ['CHI clinical documentation'] });
@@ -463,13 +472,13 @@ function mentionPositiveAny(text: string, re: RegExp): boolean {
   return mention(text, re) === 'positive';
 }
 
-export function auditAll(claims: Claim[], formulary: Formulary | null): ClaimAudit[] {
+export function auditAll(claims: Claim[], formulary: Formulary | null, watch: WatchItem[] = []): ClaimAudit[] {
   // Follow-up and refill checks only look at the same patient: index by MRN so large files stay fast.
   const byMrn = new Map<string, Claim[]>();
   for (const c of claims) if (c.mrn) byMrn.set(c.mrn, [...(byMrn.get(c.mrn) ?? []), c]);
   return claims.map((c) => {
     try {
-      return auditClaim(c, formulary, c.mrn ? byMrn.get(c.mrn)! : []);
+      return auditClaim(c, formulary, c.mrn ? byMrn.get(c.mrn)! : [], watch);
     } catch (e) {
       // One malformed row must never blank the whole audit.
       return finalize(c, [{ id: `${c.id}-err`, ruleId: 'SYS-001', area: 'ICD coding quality', severity: 'low', title: 'Encounter could not be fully audited', detail: String(e), fix: 'Check this encounter’s rows in the source file.', amountAtRisk: 0, refs: [] }]);
@@ -477,4 +486,4 @@ export function auditAll(claims: Claim[], formulary: Formulary | null): ClaimAud
   });
 }
 
-export const AREAS: AuditArea[] = ['Diagnosis ↔ Service', 'Drug ↔ Diagnosis', 'Drug safety & interactions', 'Vital signs ↔ History', 'Missing medical data', 'Severity / Justification', 'ICD coding quality', 'Follow-up & duplicates'];
+export const AREAS: AuditArea[] = ['Always-rejected items', 'Diagnosis ↔ Service', 'Drug ↔ Diagnosis', 'Drug safety & interactions', 'Vital signs ↔ History', 'Missing medical data', 'Severity / Justification', 'ICD coding quality', 'Follow-up & duplicates'];
