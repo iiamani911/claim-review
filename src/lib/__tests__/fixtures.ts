@@ -2,7 +2,7 @@
  * Synthetic demo dataset (fictional patients, doctors and claim numbers) so the platform opens in a working
  * state. It mirrors the WAD Clinic HIS export and the Tawuniya statement layouts. No real patient data.
  */
-import type { DetectedTable } from './lib/parse';
+import type { DetectedTable } from '../parse';
 
 type Line = [category: string, code: string, desc: string, net: number, units?: number];
 interface Visit {

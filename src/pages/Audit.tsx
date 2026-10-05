@@ -73,7 +73,7 @@ export function AuditWorkspace({ audits, view, exportName, emptyText }: { audits
   }, [inFile, q, level, onlyWatch, area, doctor, month, sort]);
 
   const selected = audits.find((a) => a.claim.id === sel) ?? list[0] ?? null;
-  if (!audits.length) return <div className="card"><Empty title="No encounters in this section yet">{emptyText ?? 'Upload an HIS claim export above.'}</Empty></div>;
+  if (!audits.length) return <div className="card"><Empty title="Upload a file to start analysis.">{emptyText ?? 'Upload an HIS claim export above.'}</Empty></div>;
 
   return (
     <>

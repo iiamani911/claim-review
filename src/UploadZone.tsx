@@ -14,7 +14,7 @@ const HELP: Record<Section, string> = {
 interface Report { name: string; ok: boolean; text: string }
 
 export default function UploadZone({ section, compact }: { section: Section; compact?: boolean }) {
-  const { files, addFiles, removeFile, isDemo, go } = useData();
+  const { files, addFiles, removeFile, go } = useData();
   const [report, setReport] = useState<Report[]>([]);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -54,7 +54,7 @@ export default function UploadZone({ section, compact }: { section: Section; com
       setReport(rep);
       setMsg('');
       const firstClaims = good.find((f) => f.kind === 'claims' && f.section === section);
-      if (firstClaims) go(section === 'medical' ? 'audit' : section === 'technical' ? 'technical' : 'rejections', { fileId: firstClaims.id });
+      if (firstClaims) go(section === 'medical' ? 'audit' : 'rejections', { fileId: firstClaims.id });
     } catch (e) {
       setMsg(`Import failed: ${String(e)}`);
     } finally {
@@ -90,12 +90,11 @@ export default function UploadZone({ section, compact }: { section: Section; com
         <div className="file-chips">
           {mine.map((f) => (
             <span key={f.id} className="file-chip">
-              <b>{f.name}</b>{f.demo && <span className="faint"> · demo</span>}
+              <b>{f.name}</b>
               <span className="faint num">{f.claims.length ? `${int(f.claims.length)} enc.` : `${int(f.rejections.length)} lines`}</span>
-              {!f.demo && <button className="btn small ghost" onClick={() => removeFile(f.id)} aria-label={`Remove ${f.name}`}><Icon name="close" /></button>}
+              <button className="btn small ghost" onClick={() => removeFile(f.id)} aria-label={`Remove ${f.name}`}><Icon name="close" /></button>
             </span>
           ))}
-          {isDemo && <span className="faint" style={{ fontSize: 12 }}>Demo files are replaced as soon as you upload your own.</span>}
         </div>
       )}
     </section>

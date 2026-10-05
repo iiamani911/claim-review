@@ -8,7 +8,7 @@ import { buildClaims, parseAge, parseDate, detect, readTables } from '../parse';
 import { mention } from '../text';
 import { classify } from '../kb/rejectionCodes';
 import { parseRejections, linkRejections } from '../rejections';
-import { demoClaimRecords, demoRejectionTable } from '../../demo';
+import { demoClaimRecords, demoRejectionTable } from './fixtures';
 
 const formulary = new Formulary(JSON.parse(readFileSync(join(__dirname, '../../../public/data/formulary.json'), 'utf8')));
 const claims = buildClaims(demoClaimRecords(), 'demo');

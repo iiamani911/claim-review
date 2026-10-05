@@ -4,20 +4,13 @@ import { Formulary, type FormularyData } from './lib/formulary';
 import { auditAll, viewAudit } from './lib/engine';
 import { buildWatchlist, type WatchItem } from './lib/kb/watchlist';
 import { linkRejections } from './lib/rejections';
-import { demoFiles, loadFiles, loadReview, moveFile, saveFiles, saveReview, type LoadedFile, type ReviewMap, type ReviewStatus } from './store';
+import { loadFiles, loadReview, moveFile, saveFiles, saveReview, type LoadedFile, type ReviewMap, type ReviewStatus } from './store';
 import { Icon, int } from './ui';
-import Overview from './pages/Overview';
-import ImportPage from './pages/Import';
 import AuditPage from './pages/Audit';
 import RejectionsPage from './pages/Rejections';
 import DoctorsPage from './pages/Doctors';
-import DrugChecker from './pages/DrugChecker';
-import Rulebook from './pages/Rulebook';
-import TechnicalPage from './pages/Technical';
-import ReviewPage from './pages/Review';
-import ComparePage from './pages/Compare';
 
-export type PageId = 'overview' | 'import' | 'audit' | 'rejections' | 'technical' | 'review' | 'compare' | 'doctors' | 'drugs' | 'rules';
+export type PageId = 'rejections' | 'audit' | 'doctors';
 
 interface DataCtx {
   files: LoadedFile[];
@@ -26,7 +19,6 @@ interface DataCtx {
   rejections: Rejection[];
   formulary: Formulary | null;
   watch: WatchItem[];
-  isDemo: boolean;
   addFiles: (f: LoadedFile[]) => void;
   removeFile: (id: string) => void;
   setSection: (id: string, s: Section) => void;
@@ -41,21 +33,14 @@ const Ctx = createContext<DataCtx | null>(null);
 export const useData = () => useContext(Ctx)!;
 
 const NAV: { id: PageId; label: string; icon: string }[] = [
-  { id: 'overview', label: 'Overview', icon: 'overview' },
-  { id: 'audit', label: 'Medical audit', icon: 'audit' },
   { id: 'rejections', label: 'Rejection analysis', icon: 'rejections' },
-  { id: 'technical', label: 'Technical audit', icon: 'technical' },
-  { id: 'review', label: 'Files to review', icon: 'flag' },
-  { id: 'compare', label: 'Month comparison', icon: 'compare' },
+  { id: 'audit', label: 'Medical audit', icon: 'audit' },
   { id: 'doctors', label: 'Doctors', icon: 'doctors' },
-  { id: 'drugs', label: 'Drug ↔ ICD checker', icon: 'drugs' },
-  { id: 'rules', label: 'Rulebook & sources', icon: 'rules' },
-  { id: 'import', label: 'All files', icon: 'import' },
 ];
 
 const pageFromHash = (): PageId => {
   const h = location.hash.replace('#', '') as PageId;
-  return NAV.some((n) => n.id === h) ? h : 'overview';
+  return NAV.some((n) => n.id === h) ? h : 'rejections';
 };
 
 export default function App() {
@@ -74,7 +59,7 @@ export default function App() {
       .catch((e) => setFError(String(e)));
     loadReview().then(setReviewMap);
     loadFiles().then((f) => {
-      setFiles(f && f.length ? f : demoFiles());
+      setFiles(f);
       setReady(true);
     });
     const onHash = () => setPage(pageFromHash());
@@ -82,7 +67,6 @@ export default function App() {
     return () => removeEventListener('hashchange', onHash);
   }, []);
 
-  const isDemo = files.length > 0 && files.every((f) => f.demo);
   const claims = useMemo(() => files.flatMap((f) => f.claims), [files]);
   const watch = useMemo(() => buildWatchlist(files.flatMap((f) => f.rejections)), [files]);
   const audits = useMemo(() => (formulary || fError ? auditAll(claims, formulary, watch) : []), [claims, formulary, fError, watch]);
@@ -93,14 +77,13 @@ export default function App() {
     saveFiles(next);
   };
   const ctx: DataCtx = {
-    files, claims, audits, rejections, formulary, watch, isDemo, focus,
+    files, claims, audits, rejections, formulary, watch, focus,
     // Uploading the same file again into the same section replaces it instead of doubling every encounter.
-    addFiles: (f) => persist([...files.filter((x) => !x.demo && !f.some((n) => n.name === x.name && n.section === x.section && n.sheet === x.sheet)), ...f]),
+    addFiles: (f) => persist([...files.filter((x) => !f.some((n) => n.name === x.name && n.section === x.section && n.sheet === x.sheet)), ...f]),
     removeFile: (id) => {
-      const next = files.filter((x) => x.id !== id);
-      persist(next.length ? next : demoFiles());
+      persist(files.filter((x) => x.id !== id));
     },
-    clearAll: () => persist(demoFiles()),
+    clearAll: () => persist([]),
     setSection: (id, sec) => persist(files.map((f) => (f.id === id ? moveFile(f, sec) : f))),
     review,
     setReview: (ids, st) => {
@@ -121,8 +104,6 @@ export default function App() {
   const counts: Partial<Record<PageId, number>> = {
     audit: audits.filter((a) => a.claim.section === 'medical' && serious(viewAudit(a, 'medical'))).length,
     rejections: rejections.length + audits.filter((a) => a.claim.section === 'rejection').length,
-    technical: audits.filter((a) => a.claim.section === 'technical').length,
-    review: audits.filter((a) => serious(viewAudit(a, a.claim.section === 'technical' ? 'technical' : a.claim.section === 'rejection' ? 'all' : 'medical')) && review[a.claim.id]?.status !== 'reviewed').length,
     doctors: new Set(audits.map((a) => a.claim.physician)).size,
   };
 
@@ -149,13 +130,6 @@ export default function App() {
           </div>
         </aside>
         <main className="main">
-          {isDemo && ready && (
-            <div className="banner" role="status">
-              <b>Demo data.</b> Fictional patients (June and July) are loaded so you can explore. Upload your files in Medical audit, Rejection analysis or Technical audit.
-              <button className="btn small primary" onClick={() => ctx.go('audit')}>Upload claims</button>
-              <button className="btn small" onClick={() => ctx.go('rejections')}>Upload rejections</button>
-            </div>
-          )}
           {fError && <div className="banner">Drug formulary could not be loaded ({fError}). Drug ↔ diagnosis checks are paused; other checks still run.</div>}
           {!ready ? <p className="muted">Loading…</p> : <ErrorBoundary key={page}><Page id={page} /></ErrorBoundary>}
         </main>
@@ -166,16 +140,9 @@ export default function App() {
 
 function Page({ id }: { id: PageId }) {
   switch (id) {
-    case 'overview': return <Overview />;
-    case 'import': return <ImportPage />;
     case 'audit': return <AuditPage />;
     case 'rejections': return <RejectionsPage />;
     case 'doctors': return <DoctorsPage />;
-    case 'drugs': return <DrugChecker />;
-    case 'rules': return <Rulebook />;
-    case 'technical': return <TechnicalPage />;
-    case 'review': return <ReviewPage />;
-    case 'compare': return <ComparePage />;
   }
 }
 
@@ -191,7 +158,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string }
       <div className="card" role="alert">
         <h2>This page could not be shown</h2>
         <p className="muted" style={{ marginTop: 6 }}>Something in the uploaded data broke this screen: <span className="mono">{this.state.error}</span></p>
-        <p className="muted" style={{ marginTop: 6 }}>Your files are still loaded. Try another page, or remove the last file from All files and send it to the insurance office developer.</p>
+        <p className="muted" style={{ marginTop: 6 }}>Your files are still loaded. Try another page, or remove the last uploaded file and send it to the insurance office developer.</p>
         <button className="btn" style={{ marginTop: 10 }} onClick={() => this.setState({ error: '' })}>Try again</button>
       </div>
     );

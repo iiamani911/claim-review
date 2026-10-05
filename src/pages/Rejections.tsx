@@ -75,7 +75,7 @@ export default function RejectionsPage() {
     return (
       <>
         {head}
-        <div className="card"><Empty title="No payer statements loaded">Upload a Tawuniya / Waseel statement of account or a Bupa CLPROVSTM rejection file above.</Empty></div>
+        <div className="card"><Empty title="Upload a file to start analysis.">Upload a Tawuniya / Waseel statement of account or a Bupa CLPROVSTM rejection file above.</Empty></div>
       </>
     );
   }
@@ -191,7 +191,7 @@ export default function RejectionsPage() {
     const linked = r.linkedClaim ? auditById.get(r.linkedClaim) : undefined;
     const rc = rootCause(r, auditById);
     return (
-      <tr className={r.linkedClaim ? 'clickable' : undefined} onClick={() => { if (!r.linkedClaim) return; if (r.linkedClaim.startsWith('rejection:')) { setTab('claims'); go('rejections', { claimId: r.linkedClaim }); } else go(r.linkedClaim.startsWith('technical:') ? 'technical' : 'audit', { claimId: r.linkedClaim }); }} title={r.linkedClaim ? 'Open the audited claim' : undefined}>
+      <tr className={r.linkedClaim ? 'clickable' : undefined} onClick={() => { if (!r.linkedClaim) return; if (r.linkedClaim.startsWith('rejection:')) { setTab('claims'); go('rejections', { claimId: r.linkedClaim }); } else if (!r.linkedClaim.startsWith('technical:')) go('audit', { claimId: r.linkedClaim }); }} title={r.linkedClaim ? 'Open the audited claim' : undefined}>
         <td style={{ minWidth: 200 }}>{r.serviceDesc}<br /><span className="faint mono" style={{ fontSize: 11 }}>{r.serviceCode} · {r.category}</span></td>
         <td style={{ minWidth: 150 }}>{linked && <><b className="mono">File {linked.claim.mrn}</b> · {linked.claim.patientName}<br /></>}{r.doctor || <span className="faint">not linked</span>}<br /><span className="faint mono" style={{ fontSize: 11 }}>{r.icd}</span></td>
         <td style={{ minWidth: 220 }}><span className={`tag ${r.group === 'Medical' ? 'tag-med' : 'tag-tech'}`}>{r.cause}</span><br /><span className="muted" style={{ fontSize: 12 }}>{r.reasonRaw.slice(0, 220)}</span>{r.appealStatus && <><br /><span className="faint" style={{ fontSize: 12 }}>Appeal: {r.appealStatus}</span></>}</td>

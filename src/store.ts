@@ -1,7 +1,6 @@
 import type { Claim, Rejection, Section } from './lib/types';
 import { buildClaims, detect, readTables, type FileKind } from './lib/parse';
 import { parseRejections } from './lib/rejections';
-import { demoClaimRecords, demoRejectionTable } from './demo';
 
 export interface LoadedFile {
   id: string;
@@ -69,17 +68,6 @@ export function moveFile(f: LoadedFile, section: Section): LoadedFile {
   return { ...f, section, claims };
 }
 
-export function demoFiles(): LoadedFile[] {
-  const stamp = '2026-07-31T00:00:00.000Z';
-  const recs = demoClaimRecords();
-  const rej = demoRejectionTable();
-  const header = Object.keys(recs[0]);
-  return [
-    { id: 'demo-claims', name: 'DEMO_his_export_06-07-2026.xls', kind: 'claims', section: 'medical', sheet: 'Demo', rows: recs.length, header, records: recs, claims: tag(buildClaims(recs, 'DEMO_his_export_06-07-2026.xls'), 'medical', 'demo-claims'), rejections: [], addedAt: stamp, demo: true },
-    { id: 'demo-statement', name: 'DEMO_Tawuniya_statement_07-2026.xlsx', kind: 'rejections-waseel', section: 'rejection', sheet: 'Demo', rows: rej.records.length, header: [], records: [], claims: [], rejections: parseRejections(rej, 'DEMO_Tawuniya_statement_07-2026.xlsx'), addedAt: stamp, demo: true },
-  ];
-}
-
 /** Files saved by an earlier version had no upload area. */
 export function migrate(f: LoadedFile): LoadedFile {
   if (f.section && f.header) return f;
@@ -132,6 +120,6 @@ async function get<T>(key: string): Promise<T | null> {
 }
 
 export const saveFiles = (files: LoadedFile[]) => put('all', files.filter((f) => !f.demo));
-export const loadFiles = async () => (await get<LoadedFile[]>('all'))?.map(migrate) ?? null;
+export const loadFiles = async () => ((await get<LoadedFile[]>('all')) ?? []).filter((f) => !f.demo).map(migrate);
 export const saveReview = (m: ReviewMap) => put('review', m);
 export const loadReview = async () => (await get<ReviewMap>('review')) ?? {};

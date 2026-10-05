@@ -4,7 +4,7 @@ import { doctorRows, type DoctorRow } from '../lib/analytics';
 import { AREAS } from '../lib/engine';
 import { RULES } from '../lib/kb/rules';
 import { causeById } from '../lib/kb/rejectionCodes';
-import { CopyButton, HBars, Kpi, int, pct, sar } from '../ui';
+import { CopyButton, Empty, HBars, Kpi, int, pct, sar } from '../ui';
 
 export default function DoctorsPage() {
   const { audits, rejections, focus, go } = useData();
@@ -21,7 +21,7 @@ export default function DoctorsPage() {
           <p>Audit findings and payer rejections per doctor, with a feedback memo you can send. Rejections are linked to doctors through the invoice number in the HIS export.</p>
         </div>
       </div>
-      <div className="split">
+      {!rows.length ? <div className="card"><Empty title="Upload a file to start analysis.">Upload claims in Medical audit or payer statements in Rejection analysis; doctor statistics appear here.</Empty></div> : <div className="split">
         <div className="table-wrap">
           <table>
             <thead><tr><th>Doctor</th><th className="r">Enc.</th><th className="r">Clean</th><th className="r">Must fix</th><th className="r">At risk</th><th className="r">Rejected</th></tr></thead>
@@ -40,7 +40,7 @@ export default function DoctorsPage() {
           </table>
         </div>
         <div className="detail">{d && <Profile d={d} onAudit={() => go('audit', { doctor: d.doctor })} />}</div>
-      </div>
+      </div>}
     </>
   );
 
