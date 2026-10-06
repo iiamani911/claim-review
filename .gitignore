@@ -8,3 +8,4 @@ samples/
 .DS_Store
 *.tsbuildinfo
 fixtures-local/
+.vercel
