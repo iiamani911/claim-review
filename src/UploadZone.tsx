@@ -7,6 +7,7 @@ import { Icon, int } from './ui';
 const HELP: Record<Section, string> = {
   medical: 'Drop the HIS claim export (output.xls) for claims you are about to submit. Every encounter is audited medically.',
   rejection: 'Drop the payer statements (Tawuniya / Waseel, Bupa CLPROVSTM…) and the HIS export of the rejected claims. Rejected claims get the same full medical audit to show the root cause.',
+  presubmit: 'Drop the Excel sheet you are about to upload to the insurance portal. Vital signs and codes with data-entry mistakes are corrected automatically; everything else is highlighted by colour with a short correction.',
   technical: 'Drop the HIS export for the technical audit. Price-list, contract and pre-authorisation rules will be added when you send the technical data.',
 };
 
@@ -54,7 +55,7 @@ export default function UploadZone({ section, compact }: { section: Section; com
       setReport(rep);
       setMsg('');
       const firstClaims = good.find((f) => f.kind === 'claims' && f.section === section);
-      if (firstClaims) go(section === 'medical' ? 'audit' : 'rejections', { fileId: firstClaims.id });
+      if (firstClaims) go(section === 'medical' ? 'audit' : section === 'presubmit' ? 'sheet' : 'rejections', { fileId: firstClaims.id });
     } catch (e) {
       setMsg(`Import failed: ${String(e)}`);
     } finally {

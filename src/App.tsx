@@ -9,8 +9,9 @@ import { Icon, int } from './ui';
 import AuditPage from './pages/Audit';
 import RejectionsPage from './pages/Rejections';
 import DoctorsPage from './pages/Doctors';
+import SheetPage from './pages/SheetPage';
 
-export type PageId = 'rejections' | 'audit' | 'doctors';
+export type PageId = 'rejections' | 'audit' | 'sheet' | 'doctors';
 
 interface DataCtx {
   files: LoadedFile[];
@@ -35,6 +36,7 @@ export const useData = () => useContext(Ctx)!;
 const NAV: { id: PageId; label: string; icon: string }[] = [
   { id: 'rejections', label: 'Rejection analysis', icon: 'rejections' },
   { id: 'audit', label: 'Medical audit', icon: 'audit' },
+  { id: 'sheet', label: 'Sheet correction', icon: 'technical' },
   { id: 'doctors', label: 'Doctors', icon: 'doctors' },
 ];
 
@@ -143,6 +145,7 @@ function Page({ id }: { id: PageId }) {
     case 'audit': return <AuditPage />;
     case 'rejections': return <RejectionsPage />;
     case 'doctors': return <DoctorsPage />;
+    case 'sheet': return <SheetPage />;
   }
 }
 

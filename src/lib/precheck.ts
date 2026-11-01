@@ -24,7 +24,7 @@ const levelOf = (s: Severity): Level => (s === 'critical' || s === 'high' ? 'mus
 export const LEVEL_LABEL: Record<Level, string> = { must: 'Must fix', review: 'Review', info: 'Info' };
 
 /** Logical fields of the HIS export and the header names they can have. */
-const FIELDS: Record<string, string[]> = {
+export const FIELDS: Record<string, string[]> = {
   history: ['Chief complaint', 'History', 'HPI', 'Clinical Notes', 'Complaint'],
   exam: ['Examination', 'Physical Examination', 'Clinical Examination', 'Signs', 'Findings'],
   plan: ['Plan', 'Management Plan', 'Treatment Plan'],
@@ -50,6 +50,8 @@ const FIELDS: Record<string, string[]> = {
   physician: ['Physician name', 'Doctor Name', 'Doctor', 'Physician Id', 'Doctor Code'],
   date: ['Service date', 'Date of admission'],
   subdate: ['date of submission'],
+  vat: ['Net Vat', 'VAT', 'VAT Amount'],
+  specialty: ['Drs speciality', 'Speciality', 'Specialty'],
   gender: ['gender', 'sex'],
   age: ['Age'],
   tooth: ['Tooth Number'],
@@ -215,6 +217,28 @@ function technicalChecks(src: SheetSource, today: string): Map<number, { ruleId:
   const add = (i: number, x: { ruleId: string; severity: Severity; text: string; fix: string; fields: Field[] }) => out.set(i, [...(out.get(i) ?? []), x]);
   const seenEnc = new Set<string>();
   const sameDay = new Map<string, { claim: string; i: number }>();
+  // Usual unit price per payer + service code (price lists differ between payers).
+  const prices = new Map<string, Map<number, number>>();
+  const unitPrice = (r: Record<string, string>) => {
+    const billed = money(pick(r, ...FIELDS.amount));
+    const u = parseFloat(pick(r, ...FIELDS.units)) || 1;
+    return Math.round((billed / u) * 100) / 100;
+  };
+  for (const r of src.records) {
+    const code = pick(r, ...FIELDS.code);
+    if (!code || !(money(pick(r, ...FIELDS.amount)) > 0)) continue;
+    const k = `${pick(r, ...FIELDS.payer)}|${code}`;
+    const m = prices.get(k) ?? new Map<number, number>();
+    m.set(unitPrice(r), (m.get(unitPrice(r)) ?? 0) + 1);
+    prices.set(k, m);
+  }
+  const usual = (k: string): number | null => {
+    const m = prices.get(k);
+    if (!m) return null;
+    const total = [...m.values()].reduce((a, b) => a + b, 0);
+    const [p, n] = [...m.entries()].sort((a, b) => b[1] - a[1])[0];
+    return n >= 3 && n / total >= 0.75 ? p : null;
+  };
   src.records.forEach((r, i) => {
     const claimNo = pick(r, ...CLAIM_ALIASES.claim);
     const desc = pick(r, ...FIELDS.service);
@@ -242,6 +266,18 @@ function technicalChecks(src: SheetSource, today: string): Map<number, { ruleId:
       if (prev && prev.claim !== claimNo) add(i, { ruleId: 'TEC-007', severity: 'high', text: `Same service billed same day on claim ${prev.claim}`, fix: 'Remove the duplicate claim line', fields: ['service', 'code'] });
       else if (!prev) sameDay.set(k, { claim: claimNo, i });
     }
+    const vatRaw = pick(r, ...FIELDS.vat);
+    if (vatRaw && net > 0) {
+      const vat = money(vatRaw), exp = Math.round(net * 15) / 100;
+      if (Math.abs(vat) > 0.01 && Math.abs(vat - exp) > 0.05) add(i, { ruleId: 'TEC-008', severity: 'high', text: `VAT ${vat} is not 15% of net ${net}`, fix: `Set VAT to ${exp.toFixed(2)}`, fields: ['vat', 'net'] });
+    }
+    if (code && billed > 0) {
+      const u = usual(`${pick(r, ...FIELDS.payer)}|${code}`);
+      if (u !== null && Math.abs(unitPrice(r) - u) > 0.01) add(i, { ruleId: 'TEC-009', severity: 'medium', text: `Price ${unitPrice(r)} differs from usual ${u} for this code and payer`, fix: `Check price list – usually ${u}`, fields: ['amount'] });
+    }
+    const spec = pick(r, ...FIELDS.specialty);
+    if (spec && /dental|tooth|teeth|scaling|filling|root canal|pulp|extraction of tooth/i.test(desc) && !/dent|oral|maxillo/i.test(spec)) add(i, { ruleId: 'TEC-018', severity: 'medium', text: `Dental service by ${spec}`, fix: 'Bill under the treating dentist', fields: ['physician', 'service'] });
+    if (spec && /\b(er|emergency)\b.*consult|consult.*\b(er|emergency)\b/i.test(desc) && !/emerg|\ber\b/i.test(spec)) add(i, { ruleId: 'TEC-019', severity: 'medium', text: `ER consultation billed by ${spec}`, fix: 'Use the clinic consultation code', fields: ['service', 'code'] });
     if (seenEnc.has(key)) return;
     seenEnc.add(key);
     // Encounter-level data (checked once, on the encounter's first row).

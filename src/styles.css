@@ -283,3 +283,5 @@ mark.neg { background: color-mix(in srgb, var(--s1) 20%, transparent); }
 .lvl-review { background: #FFC000; color: #000; }
 .lvl-info { background: #DDEBF7; color: #1F3864; }
 .lvl-ok { background: #C6EFCE; color: #006100; }
+.auto-item { color: #006100; margin: 2px 0; }
+.auto-item s { color: var(--ink-3); }

@@ -1,5 +1,5 @@
 /** Where a file was uploaded: it decides how the platform treats it. */
-export type Section = 'medical' | 'rejection' | 'technical';
+export type Section = 'medical' | 'rejection' | 'technical' | 'presubmit';
 
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 

@@ -75,3 +75,35 @@ describe.skipIf(!existsSync(sample))('real export (local only)', () => {
     expect(ch.rows.length).toBe(t.records.length);
   });
 });
+
+import { autoFix } from '../autofix';
+
+describe('auto-correction', () => {
+  const header = ['ClaimNo', 'MRN', 'Age', 'Temperature', 'BP', 'Height', 'Weight', 'ICD1', 'diag 2', 'service code', 'ServiceDescription'];
+  const row = (o: Record<string, string>) => ({ claimno: '1', mrn: '9', age: '30Y', temperature: '37', bp: '120/80', height: '170', weight: '70', icd1: 'J02.9', diag2: '-1', servicecode: 'C1', servicedescription: 'Consultation', ...o });
+  it('corrects only unambiguous data-entry mistakes', () => {
+    const recs = [
+      row({ temperature: '3703' }), row({ temperature: '385' }), row({ temperature: '101.3' }), row({ temperature: '1' }),
+      row({ bp: '80/120' }), row({ bp: '130-85' }), row({ height: '1.65' }), row({ age: '8M', weight: '7800' }),
+      row({ icd1: 'j029', diag2: 'r50.9' }), row({ servicecode: '0109222573', servicedescription: 'NS NORMAL SALINE 0.9 %/ml 100 ML/Bottle' }),
+      row({ servicecode: 'SC100', servicedescription: 'Sodium Chloride 0.9% 100 ml' }),
+    ];
+    const { records, changes } = autoFix(header, recs);
+    expect(records.map((r) => r.temperature).slice(0, 4)).toEqual(['37', '38.5', '38.5', '1']);
+    expect(records[4].bp).toBe('120/80');
+    expect(records[5].bp).toBe('130/85');
+    expect(records[6].height).toBe('165');
+    expect(records[7].weight).toBe('7.8');
+    expect(records[8].icd1).toBe('J02.9');
+    expect(records[8].diag2).toBe('R50.9');
+    expect(records[9].servicecode).toBe('SC100');
+    expect(records[0].icd1).toBe('J02.9');
+    expect(recs[0].temperature).toBe('3703'); // input untouched
+    expect(changes.every((c) => c.from !== c.to && c.why)).toBe(true);
+    expect(changes.some((c) => c.row === 3)).toBe(false); // temperature 1 cannot be guessed
+  });
+  it('leaves normal saline when no contracted item is in the sheet', () => {
+    const { records } = autoFix(header, [row({ servicecode: '0109222573', servicedescription: 'NS NORMAL SALINE 0.9 %/ml 100 ML/Bottle' })]);
+    expect(records[0].servicecode).toBe('0109222573');
+  });
+});

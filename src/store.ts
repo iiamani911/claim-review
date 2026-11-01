@@ -23,6 +23,7 @@ export const SECTION_LABEL: Record<Section, string> = {
   medical: 'Medical audit',
   rejection: 'Rejection analysis',
   technical: 'Technical audit',
+  presubmit: 'Sheet correction',
 };
 
 function tag(claims: Claim[], section: Section, id: string): Claim[] {
