@@ -259,3 +259,27 @@ mark.neg { background: color-mix(in srgb, var(--s1) 20%, transparent); }
 .ready { padding: 12px 14px; border-radius: 8px; background: var(--good-soft); color: var(--good); font-weight: 600; }
 .review-box { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--surface-2); }
 .review-box summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+
+/* Highlighted sheet (pre-submission check) */
+.cat-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.cat-chip { border: 1px solid rgba(0,0,0,.12); border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.cat-chip[aria-pressed="true"] { outline: 2px solid currentColor; outline-offset: 1px; }
+.sheet-wrap { max-height: calc(100vh - 150px); overflow: auto; }
+.sheet { font-size: 12px; border-collapse: separate; border-spacing: 0; }
+.sheet th { position: sticky; top: 0; z-index: 2; background: var(--surface-2, var(--surface)); white-space: nowrap; }
+.sheet td { vertical-align: top; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.sheet td.wide { white-space: normal; min-width: 240px; max-width: 360px; }
+.sheet .sticky-a, .sheet .sticky-b { position: sticky; background: var(--surface); z-index: 1; }
+.sheet th.sticky-a, .sheet th.sticky-b { z-index: 3; }
+.sheet .sticky-a { left: 0; min-width: 44px; }
+.sheet .sticky-b { left: 44px; min-width: 78px; }
+.sheet .fix-col { white-space: normal; min-width: 230px; max-width: 280px; }
+.sheet .prob-col { white-space: normal; min-width: 260px; max-width: 340px; }
+.fix-item { font-weight: 700; border-left: 3px solid; padding: 1px 0 1px 6px; margin: 2px 0; }
+.prob-item { display: flex; gap: 6px; align-items: baseline; margin: 2px 0; }
+.cat-dot { flex: none; width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+.lvl { display: inline-block; border-radius: 5px; padding: 2px 7px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.lvl-must { background: #C00000; color: #fff; }
+.lvl-review { background: #FFC000; color: #000; }
+.lvl-info { background: #DDEBF7; color: #1F3864; }
+.lvl-ok { background: #C6EFCE; color: #006100; }

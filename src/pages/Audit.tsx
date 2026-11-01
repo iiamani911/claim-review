@@ -6,6 +6,7 @@ import UploadZone from '../UploadZone';
 import { exportFindings } from '../lib/exportXlsx';
 import { Empty, Icon, Sev, int, sar } from '../ui';
 import ClaimDetail from './ClaimDetail';
+import SheetCheckView from './SheetCheck';
 
 const rank = (a: ClaimAudit) => (a.worst ? SEVERITY_ORDER.indexOf(a.worst) : 9);
 
@@ -14,6 +15,7 @@ export const needsReview = (a: ClaimAudit) => a.findings.some((f) => f.severity 
 export default function AuditPage() {
   const { audits } = useData();
   const mine = useMemo(() => audits.filter((a) => a.claim.section === 'medical').map((a) => viewAudit(a, 'medical')), [audits]);
+  const [tab, setTab] = useState<'claims' | 'sheet'>('claims');
   return (
     <>
       <div className="page-head">
@@ -24,7 +26,11 @@ export default function AuditPage() {
         </div>
       </div>
       <UploadZone section="medical" compact />
-      <AuditWorkspace audits={mine} view="medical" exportName="WAD_medical_audit.xlsx" />
+      <div className="tabs" role="tablist">
+        <button role="tab" aria-selected={tab === 'claims'} onClick={() => setTab('claims')}>Claim review</button>
+        <button role="tab" aria-selected={tab === 'sheet'} onClick={() => setTab('sheet')}>Highlighted sheet – before portal upload</button>
+      </div>
+      {tab === 'claims' ? <AuditWorkspace audits={mine} view="medical" exportName="WAD_medical_audit.xlsx" /> : <SheetCheckView />}
     </>
   );
 }

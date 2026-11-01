@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 import type { ClaimAudit, Rejection, Severity } from './types';
 
 const LEVEL = (s: Severity | null | undefined) => (!s ? '' : s === 'critical' || s === 'high' ? 'MUST FIX' : s === 'medium' ? 'REVIEW' : 'INFO');

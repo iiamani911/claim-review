@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 import type { Claim, Diagnosis, ServiceLine } from './types';
 
 export type FileKind = 'claims' | 'rejections-waseel' | 'rejections-bupa' | 'rejections-generic' | 'unknown';
